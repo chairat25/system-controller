@@ -19,6 +19,8 @@ final class AppModel {
     var alertMessage: String?
     private(set) var isLaunchAtLoginEnabled = LoginItem.isEnabled
     private(set) var hasInputPermission = InputMonitor.hasPermission
+    /// Stop-hook settings for auto /compact, edited from the Dev tab.
+    private(set) var idleCompact = IdleCompactStore.load()
     let keyboardLock = KeyboardLockController()
 
     @ObservationIgnored private let store: ConfigStore
@@ -346,6 +348,18 @@ final class AppModel {
         let pack = CustomPack(name: name ?? "My \(base.title) Pack", base: base)
         update { $0.addingCustomPack(pack).selectingPack(.custom(pack.id)) }
         return pack
+    }
+
+    func updateIdleCompact(_ transform: (IdleCompactSettings) -> IdleCompactSettings) {
+        let next = transform(idleCompact)
+        guard next != idleCompact else { return }
+        idleCompact = next
+        do {
+            try IdleCompactStore.save(next)
+        } catch {
+            logger.error("Saving idle compact settings failed: \(error.localizedDescription, privacy: .public)")
+            alertMessage = "Could not save the idle /compact setting: \(error.localizedDescription)"
+        }
     }
 
     func updatePack(_ id: UUID, _ transform: (CustomPack) -> CustomPack) {
