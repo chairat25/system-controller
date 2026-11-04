@@ -7,7 +7,7 @@
 ### Added
 - **Lock keyboard for cleaning** ใน menu bar: ล็อกคีย์บอร์ดไว้เช็ดโดยไม่ต้องปิดจอ. block ทุกปุ่มรวม modifier และปุ่ม media/เสียง/ความสว่าง, overlay ทุกจอกันคลิกพลาดจาก trackpad, ปลดล็อกด้วยการกดค้าง "Hold to unlock" 1 วินาที หรือปลดเองหลัง 10 นาที (กันกรณีเมาส์ใช้ไม่ได้), ไม่เล่นเสียงคีย์บอร์ดระหว่างล็อก. ต้องให้สิทธิ์ Accessibility (Settings → Permissions มีปุ่มเปิดหน้านั้น)
 - **Lock for owner (screen stays on)** ใน menu bar: ล็อกคีย์บอร์ด+overlay เหมือน Lock keyboard for cleaning แต่ปลดด้วย **"Unlock as owner"** → Touch ID ขึ้นในหน้าล็อค (ไม่มี popup) หรือ prompt รหัสผ่าน login ถ้าไม่มี Touch ID แทนการกดค้าง. ไม่หมดเวลาเอง. ระหว่าง prompt รหัสผ่านให้ key ผ่านไปพิมพ์ได้. ไม่มีรหัสผ่าน login จะล็อกไม่ได้ (แสดงข้อความให้ตั้งก่อน). `UnlockMethod` ใน Core, `OwnerAuth` ใน Services (LocalAuthentication). ไม่ใช่ lock screen ของ macOS: force quit Sound Control ยังปลดได้
-- `install.sh`: ติดตั้งด้วยคำสั่งเดียว `curl -fsSL https://raw.githubusercontent.com/chairat25/sound-noi/main/install.sh | bash` โหลด release ล่าสุด, เช็ค SHA-256 และ code signature, ปิดตัวเก่าที่รันอยู่ (คืนเสียง macOS ก่อน) แล้วติดตั้งและเปิดแอป ไม่เจอ Gatekeeper prompt
+- `install.sh`: ติดตั้งด้วยคำสั่งเดียว `curl -fsSL https://raw.githubusercontent.com/chairat25/system-controller/main/install.sh | bash` โหลด release ล่าสุด, เช็ค SHA-256 และ code signature, ปิดตัวเก่าที่รันอยู่ (คืนเสียง macOS ก่อน) แล้วติดตั้งและเปิดแอป ไม่เจอ Gatekeeper prompt
 
 ### Changed
 - เปลี่ยนชื่อแอปเป็น **System Controller** (bundle id `com.pond.soundcontrol` เดิม เพื่อให้สิทธิ์ที่ให้ไว้ยังอยู่). หน้าต่างหลักเป็น tab: tab แรก Sound Control, tab ถัดไปเพิ่มเป็น module ใหม่ได้ใน `ModuleTab`

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Installs the latest Sound Control release without the Gatekeeper prompt.
 #
-#   curl -fsSL https://raw.githubusercontent.com/chairat25/sound-noi/main/install.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/chairat25/system-controller/main/install.sh | bash
 #
 # Files fetched with curl carry no quarantine flag, so macOS opens the app directly.
 # The download is checked against the release's SHA-256 file before anything is installed.
@@ -12,7 +12,7 @@
 #   SOUND_CONTROL_NO_OPEN  set to 1 to skip launching the app afterwards
 set -euo pipefail
 
-REPO="chairat25/sound-noi"
+REPO="chairat25/system-controller"
 APP_NAME="Sound Control"
 MIN_MACOS=15
 WORK_DIR=""

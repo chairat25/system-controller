@@ -16,7 +16,7 @@
 เปิด **Terminal** แล้ววาง:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/chairat25/sound-noi/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/chairat25/system-controller/main/install.sh | bash
 ```
 
 สคริปต์โหลด release ล่าสุด, เช็ค SHA-256, ติดตั้งลง `/Applications` แล้วเปิดแอปให้ ไม่เจอหน้าต่าง "Apple could not verify…" เพราะไฟล์ที่โหลดผ่าน `curl` ไม่ถูกติด quarantine. รันซ้ำเพื่ออัพเดตเป็นเวอร์ชันใหม่ได้ (settings และเสียงที่ import ไว้ยังอยู่)
@@ -25,7 +25,7 @@ curl -fsSL https://raw.githubusercontent.com/chairat25/sound-noi/main/install.sh
 
 ## ติดตั้งจาก DMG
 
-1. โหลด `SoundControl-<version>.dmg` จากหน้า [Releases](https://github.com/chairat25/sound-noi/releases/latest)
+1. โหลด `SoundControl-<version>.dmg` จากหน้า [Releases](https://github.com/chairat25/system-controller/releases/latest)
 2. เปิด DMG แล้วลาก **Sound Control** ไปวางที่ **Applications**
 3. เปิดครั้งแรก: แอปไม่ได้ notarize กับ Apple macOS จึงบล็อกไว้ ปลดได้ 2 วิธี
    - เปิดแอปหนึ่งครั้ง (จะขึ้นเตือน) กด **Done** → เปิด **System Settings → Privacy & Security** ใหม่ → ปุ่ม **Open Anyway** อยู่ใต้ "Allow applications from" (ขึ้นแค่ราว 1 ชั่วโมงหลังลองเปิด และต้องเปิดหน้า Settings ใหม่หลังลองเปิดแอป)
@@ -44,8 +44,8 @@ curl -fsSL https://raw.githubusercontent.com/chairat25/sound-noi/main/install.sh
 ต้องมี Xcode 16+ หรือ Swift 6 toolchain
 
 ```bash
-git clone https://github.com/chairat25/sound-noi.git
-cd sound-noi
+git clone https://github.com/chairat25/system-controller.git
+cd system-controller
 scripts/build-app.sh                     # ได้ build/System Controller.app (เฉพาะ CPU เครื่องนี้)
 scripts/build-app.sh --install           # build แล้ว copy ไป /Applications
 scripts/build-app.sh --universal --dmg   # แบบ release: Apple Silicon + Intel, ได้ .dmg .zip .sha256 ใน build/
