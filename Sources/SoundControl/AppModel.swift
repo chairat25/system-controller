@@ -19,6 +19,7 @@ final class AppModel {
     var alertMessage: String?
     private(set) var isLaunchAtLoginEnabled = LoginItem.isEnabled
     private(set) var hasInputPermission = InputMonitor.hasPermission
+    let keyboardLock = KeyboardLockController()
 
     @ObservationIgnored private let store: ConfigStore
     @ObservationIgnored private let soundStore: UserSoundStore
@@ -29,6 +30,8 @@ final class AppModel {
     @ObservationIgnored private var lastIndex: [TriggerID: Int] = [:]
     /// Start of the last non-chatty sound, for burst suppression.
     @ObservationIgnored private var lastEventSound: Date?
+    /// Set from "will sleep" until a real wake; dark wakes (lid closed) never post a wake.
+    @ObservationIgnored private var asleepSince: Date?
     @ObservationIgnored private var pendingWarm: DispatchWorkItem?
     /// `kill`/`pkill` should still go through normal termination so macOS sounds are restored.
     @ObservationIgnored private var termSignal: DispatchSourceSignal?
@@ -73,6 +76,7 @@ final class AppModel {
                 self.flushSave()
             }
         }
+        observeSleep()
         DispatchQueue.main.asyncAfter(deadline: .now() + Self.startupSoundDelay) { [weak self] in
             MainActor.assumeIsolated { self?.handle(.appStarted, context: nil) }
         }
@@ -80,10 +84,23 @@ final class AppModel {
 
     // MARK: - Events
 
+    private func observeSleep() {
+        let center = NSWorkspace.shared.notificationCenter
+        center.addObserver(forName: NSWorkspace.willSleepNotification, object: nil, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated { self?.asleepSince = Date() }
+        }
+        for name in [NSWorkspace.didWakeNotification, NSWorkspace.screensDidWakeNotification] {
+            center.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
+                MainActor.assumeIsolated { self?.asleepSince = nil }
+            }
+        }
+    }
+
     func handle(_ trigger: TriggerID, context: String?) {
+        if keyboardLock.isLocked, KeyboardLock.silences(trigger) { return }
         let now = Date()
         let decision = PlaybackGate.decide(trigger, config: config, now: now, lastPlayed: lastPlayed[trigger],
-                                           lastEventSound: lastEventSound)
+                                           lastEventSound: lastEventSound, asleepSince: asleepSince)
         let info = TriggerCatalog.info(for: trigger)
         switch decision {
         case let .skipped(reason):
@@ -126,8 +143,7 @@ final class AppModel {
             logger.error("No buffer for \(ref.string, privacy: .public)")
             return false
         }
-        engine.play(buffer, gain: gain)
-        return true
+        return engine.play(buffer, gain: gain)
     }
 
     private func record(_ trigger: TriggerID, _ date: Date, skip: SkipReason?, sound: String?, context: String?) {

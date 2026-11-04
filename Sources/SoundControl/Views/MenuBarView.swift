@@ -40,6 +40,8 @@ struct MenuBarView: View {
                 }
             }
 
+            KeyboardLockRow()
+
             Divider()
             Text("RECENT").font(.caption2.weight(.bold)).foregroundStyle(.secondary)
             if model.log.entries.isEmpty {
@@ -67,5 +69,35 @@ struct MenuBarView: View {
         }
         .padding(14)
         .frame(width: 320)
+    }
+}
+
+/// Starts a keyboard lock: the cleaning lock (hold to unlock) or the owner lock (Touch ID / password).
+/// Explains the Accessibility permission when macOS refuses it.
+private struct KeyboardLockRow: View {
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            lockButton("Lock keyboard for cleaning", systemImage: "keyboard.badge.ellipsis") {
+                model.keyboardLock.lockKeyboard()
+            }
+            lockButton("Lock for owner (screen stays on)", systemImage: "touchid") {
+                model.keyboardLock.lockForOwner()
+            }
+            if let problem = model.keyboardLock.problem {
+                Text(problem).font(.caption).foregroundStyle(Theme.warning)
+                Button("Open Accessibility Settings") { PrivacySettings.openAccessibility() }
+                    .font(.caption)
+            }
+        }
+    }
+
+    private func lockButton(_ title: String, systemImage: String, start: @escaping () -> Void) -> some View {
+        Button(action: start) {
+            Label(title, systemImage: systemImage).frame(maxWidth: .infinity)
+        }
+        .controlSize(.large)
+        .disabled(model.keyboardLock.isLocked)
     }
 }
