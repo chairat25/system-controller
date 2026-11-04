@@ -3,9 +3,9 @@
 <plist version="1.0">
 <dict>
     <key>CFBundleName</key>
-    <string>Sound Control</string>
+    <string>System Controller</string>
     <key>CFBundleDisplayName</key>
-    <string>Sound Control</string>
+    <string>System Controller</string>
     <key>CFBundleIdentifier</key>
     <string>com.pond.soundcontrol</string>
     <key>CFBundleExecutable</key>

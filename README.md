@@ -1,6 +1,6 @@
-# Sound Control
+# System Controller
 
-แอป menu-bar บน macOS ที่เล่นเสียงเมื่อ Mac ทำอะไรบางอย่าง: เสียบสายชาร์จ, ล็อกจอ, เสียบ USB, เน็ตหลุด, กดคีย์บอร์ด, ดาวน์โหลดเสร็จ รวม 60 เหตุการณ์
+แอป menu-bar บน macOS ที่รวมเครื่องมือจัดการ Mac ไว้ในหน้าต่างเดียว แต่ละอย่างเป็น tab. tab แรกคือ **Sound Control** ที่เล่นเสียงเมื่อ Mac ทำอะไรบางอย่าง: เสียบสายชาร์จ, ล็อกจอ, เสียบ USB, เน็ตหลุด, กดคีย์บอร์ด, ดาวน์โหลดเสร็จ รวม 60 เหตุการณ์
 ทุก trigger เปลี่ยนเสียงได้เอง ใช้ sound pack สำเร็จรูป หรือสร้าง pack ของตัวเองแบบเป็น game master ก็ได้
 
 ฟีเจอร์ทั้งหมดเปิดใช้ได้เลย ไม่มีระบบ Pro/License
@@ -46,7 +46,7 @@ curl -fsSL https://raw.githubusercontent.com/chairat25/sound-noi/main/install.sh
 ```bash
 git clone https://github.com/chairat25/sound-noi.git
 cd sound-noi
-scripts/build-app.sh                     # ได้ build/Sound Control.app (เฉพาะ CPU เครื่องนี้)
+scripts/build-app.sh                     # ได้ build/System Controller.app (เฉพาะ CPU เครื่องนี้)
 scripts/build-app.sh --install           # build แล้ว copy ไป /Applications
 scripts/build-app.sh --universal --dmg   # แบบ release: Apple Silicon + Intel, ได้ .dmg .zip .sha256 ใน build/
 ```
@@ -62,6 +62,8 @@ scripts/build-app.sh --universal --dmg   # แบบ release: Apple Silicon + In
 - **สวิตช์ Listening** เปิด/ปิดเสียงทั้งหมดทีเดียว
 - **Volume** ระดับเสียงหลัก
 - **Pack** เปลี่ยน sound pack ที่ใช้อยู่
+- **Lock keyboard for cleaning** ล็อกคีย์บอร์ดไว้เช็ด โดยจอยังเปิด: ทุกปุ่ม (รวม modifier, ปุ่ม media/เสียง/ความสว่าง) ไม่ทำงาน, จอขึ้น overlay กันคลิกพลาดจาก trackpad. ปลดล็อกโดย **กดค้าง "Hold to unlock" 1 วินาที** ด้วยเมาส์/trackpad หรือรอ 10 นาทีปลดเอง. ระหว่างล็อกไม่เล่นเสียงคีย์บอร์ด. ครั้งแรกต้องให้สิทธิ์ **Accessibility**. ปุ่ม power และ Touch ID block ไม่ได้
+- **Lock for owner (screen stays on)** ล็อกเหมือนข้างบน แต่ปลดได้เฉพาะเจ้าของเครื่อง: กด **"Unlock as owner"** แล้วใช้ **Touch ID** (ไอคอนสแกนขึ้นในหน้าล็อค มี animation รอนิ้ว) หรือ **รหัสผ่าน login** (macOS prompt ถ้าไม่มี Touch ID). ไม่หมดเวลาเอง. ระหว่าง prompt รหัสผ่านให้ key ผ่านไปพิมพ์ได้. ต้องตั้งรหัสผ่าน login ไว้ก่อน. ไม่ใช่ระบบกันเครื่องแบบ lock screen ของ macOS: force quit Sound Control (Cmd+Opt+Esc) ยังปิด overlay ได้ ถ้าต้องกันจริงใช้ Lock Screen (Control+Command+Q)
 - **Recent** 5 event ล่าสุด
 - **Open Sound Control…** (⌘,) เปิดหน้าต่างหลัก · **Quit** (⌘Q)
 
@@ -152,6 +154,7 @@ event ถี่ๆ (กดคีย์, คลิก, ปรับ volume, ส�
 | Trigger | ต้องการ |
 |---|---|
 | Keyboard & Mouse | **Input Monitoring** — System Settings → Privacy & Security → Input Monitoring → เปิด Sound Control (ดูแค่ key code ไม่เก็บสิ่งที่พิมพ์) |
+| Lock keyboard (cleaning / owner) | **Accessibility** — System Settings → Privacy & Security → Accessibility → เปิด Sound Control (ต้องใช้เพราะ lock หยุด key ไม่ใช่แค่ฟัง) |
 | Bluetooth | ขอสิทธิ์ Bluetooth ครั้งแรกที่เปิด trigger |
 | Download finished | ขอสิทธิ์โฟลเดอร์ Downloads ครั้งแรก |
 | Screenshot taken | ขอสิทธิ์โฟลเดอร์ Desktop (หรือโฟลเดอร์ที่เก็บ screenshot) ครั้งแรก. ถ้าไม่อนุญาต ยังทำงานผ่าน Spotlight แต่ช้ากว่า |

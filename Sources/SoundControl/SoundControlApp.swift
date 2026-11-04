@@ -22,8 +22,8 @@ struct SoundControlApp: App {
         }
         .menuBarExtraStyle(.window)
 
-        Window("Sound Control", id: "main") {
-            MainWindow().environment(model)
+        Window("System Controller", id: "main") {
+            SystemControllerWindow().environment(model)
         }
         .defaultSize(width: 980, height: 720)
         .windowResizability(.contentMinSize)

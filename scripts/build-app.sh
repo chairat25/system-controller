@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Builds build/Sound Control.app (ad-hoc signed).
+# Builds build/System Controller.app (ad-hoc signed).
 # Usage: scripts/build-app.sh [--universal] [--dmg] [--install]
 #   --universal  build for Apple Silicon and Intel (slower)
 #   --dmg        also create build/SoundControl-<version>.dmg and .zip for distribution
@@ -9,7 +9,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 VERSION="${VERSION:-1.2.0}"
 BUILD_NUMBER="$(date +%Y%m%d%H%M)"
-APP_NAME="Sound Control"
+APP_NAME="System Controller"
 APP="$ROOT/build/$APP_NAME.app"
 
 UNIVERSAL=false
