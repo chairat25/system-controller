@@ -4,6 +4,7 @@ import SoundControlCore
 
 /// Locks the keyboard while the screen stays on: blocks keys and covers every screen with an overlay.
 /// The overlay opens either by holding its button (`holdButton`) or by the owner's Touch ID / password.
+/// The owner lock doubles as the Smartheart Screen Saver.
 @MainActor
 @Observable
 final class KeyboardLockController {
@@ -19,15 +20,16 @@ final class KeyboardLockController {
     var isLocked: Bool { lock != nil }
 
     func lockKeyboard() {
-        startLock(.holdButton)
+        startLock(.holdButton, screenSaver: .default, sessions: nil, onPin: { _, _ in })
     }
 
-    func lockForOwner() {
+    func lockForOwner(screenSaver: ScreenSaverSettings, sessions: ClaudeSessionMonitor,
+                      onPin: @escaping @MainActor (String, Bool) -> Void) {
         guard OwnerAuth.isAvailable else {
             problem = OwnerAuth.setupMessage
             return
         }
-        startLock(.ownerAuthentication)
+        startLock(.ownerAuthentication, screenSaver: screenSaver, sessions: sessions, onPin: onPin)
     }
 
     func unlockKeyboard() {
@@ -39,7 +41,8 @@ final class KeyboardLockController {
         lock = nil
     }
 
-    private func startLock(_ unlock: UnlockMethod) {
+    private func startLock(_ unlock: UnlockMethod, screenSaver: ScreenSaverSettings, sessions: ClaudeSessionMonitor?,
+                           onPin: @escaping @MainActor (String, Bool) -> Void) {
         guard lock == nil else { return }
         guard KeyboardBlocker.hasPermission else {
             KeyboardBlocker.requestPermission()
@@ -53,7 +56,7 @@ final class KeyboardLockController {
         let next = KeyboardLock(lockedAt: Date(), unlock: unlock)
         problem = nil
         lock = next
-        overlay = KeyboardLockOverlay(lock: next, onUnlock: { [weak self] in self?.unlockKeyboard() },
+        overlay = KeyboardLockOverlay(lock: next, screenSaver: screenSaver, sessions: sessions, onPin: onPin, onUnlock: { [weak self] in self?.unlockKeyboard() },
                                       onPasswordPrompt: { [weak self] in Task { await self?.unlockWithPassword() } })
         if next.expires { scheduleExpiry() }
     }

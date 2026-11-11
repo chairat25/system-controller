@@ -21,12 +21,21 @@ final class AppModel {
     private(set) var hasInputPermission = InputMonitor.hasPermission
     /// Stop-hook settings for auto /compact, edited from the Dev tab.
     private(set) var idleCompact = IdleCompactStore.load()
+    /// What the owner-lock screen saver shows and how it dims, edited from the Screen Saver tab.
+    private(set) var screenSaver = ScreenSaverStore.load()
+    /// When to hand off and /compact working sessions as the five-hour quota runs out, edited from the Dev tab.
+    private(set) var limitGuardSettings = LimitGuardStore.load()
+    /// Set when macOS refuses the screen saver shortcut, usually because another app already uses it.
+    private(set) var shortcutProblem: String?
     let keyboardLock = KeyboardLockController()
+    let sessions = ClaudeSessionMonitor()
+    let terminalPermissions = TerminalPermissions()
 
     @ObservationIgnored private let store: ConfigStore
     @ObservationIgnored private let soundStore: UserSoundStore
     @ObservationIgnored private let library: SoundLibrary
     @ObservationIgnored private let engine = AudioEngine()
+    @ObservationIgnored private var screenSaverHotKey: GlobalHotKey?
     @ObservationIgnored private var hub: MonitorHub?
     @ObservationIgnored private var lastPlayed: [TriggerID: Date] = [:]
     @ObservationIgnored private var lastIndex: [TriggerID: Int] = [:]
@@ -63,6 +72,10 @@ final class AppModel {
             MainActor.assumeIsolated {
                 guard let self else { return }
                 self.installTerminationSignal()
+                self.installScreenSaverHotKey()
+                self.sessions.start(settings: { [weak self] in self?.limitGuardSettings ?? .default },
+                                    idleSettings: { [weak self] in self?.idleCompact ?? .default })
+                self.terminalPermissions.start()
                 self.config = self.reconcileTweaks(self.config)
                 self.hub?.reconcile(enabled: self.config.enabledTriggers, isListening: self.config.isListening)
                 self.applyAudioReadiness()
@@ -359,6 +372,59 @@ final class AppModel {
         } catch {
             logger.error("Saving idle compact settings failed: \(error.localizedDescription, privacy: .public)")
             alertMessage = "Could not save the idle /compact setting: \(error.localizedDescription)"
+        }
+    }
+
+    func updateLimitGuard(_ transform: (LimitGuardSettings) -> LimitGuardSettings) {
+        let next = transform(limitGuardSettings)
+        guard next != limitGuardSettings else { return }
+        limitGuardSettings = next
+        do {
+            try LimitGuardStore.save(next)
+        } catch {
+            logger.error("Saving limit guard settings failed: \(error.localizedDescription, privacy: .public)")
+            alertMessage = "Could not save the usage limit setting: \(error.localizedDescription)"
+        }
+    }
+
+    func updateScreenSaver(_ transform: (ScreenSaverSettings) -> ScreenSaverSettings) {
+        let next = transform(screenSaver)
+        guard next != screenSaver else { return }
+        let shortcutChanged = next.shortcut != screenSaver.shortcut
+        screenSaver = next
+        if shortcutChanged { registerScreenSaverShortcut() }
+        do {
+            try ScreenSaverStore.save(next)
+        } catch {
+            logger.error("Saving screen saver settings failed: \(error.localizedDescription, privacy: .public)")
+            alertMessage = "Could not save the screen saver settings: \(error.localizedDescription)"
+        }
+    }
+
+    private func installScreenSaverHotKey() {
+        screenSaverHotKey = GlobalHotKey { [weak self] in self?.lockForOwner() }
+        registerScreenSaverShortcut()
+    }
+
+    private func registerScreenSaverShortcut() {
+        guard let hotKey = screenSaverHotKey else { return }
+        let isRegistered = hotKey.register(screenSaver.shortcut)
+        shortcutProblem = isRegistered ? nil : "\(screenSaver.shortcut?.displayString ?? "That shortcut") is already used by macOS or another app. Pick a different one."
+    }
+
+    /// While the recorder listens, the current shortcut is released so pressing it again records instead of locking.
+    func setShortcutRecording(_ isRecording: Bool) {
+        if isRecording {
+            screenSaverHotKey?.unregister()
+        } else {
+            registerScreenSaverShortcut()
+        }
+    }
+
+    /// Starts the owner-lock screen saver with the current settings.
+    func lockForOwner() {
+        keyboardLock.lockForOwner(screenSaver: screenSaver, sessions: sessions) { [weak self] id, isPinned in
+            self?.updateScreenSaver { $0.pinning(id, isPinned) }
         }
     }
 

@@ -64,7 +64,7 @@ private struct KeyboardLockRow: View {
                 model.keyboardLock.lockKeyboard()
             }
             lockButton("Lock for owner (screen stays on)", systemImage: "touchid") {
-                model.keyboardLock.lockForOwner()
+                model.lockForOwner()
             }
             if let problem = model.keyboardLock.problem {
                 Text(problem).font(.caption).foregroundStyle(Theme.warning)

@@ -5,7 +5,7 @@ import SwiftUI
 struct MenuBarView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.openWindow) private var openWindow
-    @State private var tab: ModuleTab = .soundControl
+    @State private var tab: ModuleTab = .control
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -16,13 +16,17 @@ struct MenuBarView: View {
             .labelsHidden()
 
             switch tab {
-            case .soundControl: SoundPanel()
+            case .control: SoundPanel()
+            case .screenSaver: ScreenSaverPanel()
             case .dev: DevPanel()
             }
 
             Divider()
+            Toggle("Launch at login", isOn: Binding(get: { model.isLaunchAtLoginEnabled },
+                                                    set: { model.setLaunchAtLogin($0) }))
+                .font(.callout)
             HStack {
-                if tab == .soundControl {
+                if tab == .control {
                     Button("Open Sound Control…") {
                         openWindow(id: "main")
                         NSApp.activate()

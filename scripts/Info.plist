@@ -26,6 +26,8 @@
     <string>public.app-category.utilities</string>
     <key>NSHighResolutionCapable</key>
     <true/>
+    <key>NSAppleEventsUsageDescription</key>
+    <string>System Controller shows your Claude Code sessions on the screen saver and types /compact or a handoff request into them, in iTerm2 or Terminal.</string>
     <key>NSBluetoothAlwaysUsageDescription</key>
     <string>Sound Control plays a sound when Bluetooth devices such as AirPods connect or disconnect.</string>
     <key>NSDownloadsFolderUsageDescription</key>
