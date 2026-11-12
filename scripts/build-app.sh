@@ -60,7 +60,13 @@ if $DMG; then
     mkdir -p "$STAGE"
     cp -R "$APP" "$STAGE/"
     ln -s /Applications "$STAGE/Applications"
-    hdiutil create -volname "$APP_NAME" -srcfolder "$STAGE" -ov -format UDZO "$DMG_PATH" >/dev/null
+    # makehybrid never mounts the image, so it cannot fail with "Resource busy" when
+    # something (Spotlight, Finder) holds the temporary volume that `hdiutil create` mounts.
+    RAW_DMG="$ROOT/build/$ARTIFACT-raw.dmg"
+    rm -f "$RAW_DMG"
+    hdiutil makehybrid -hfs -hfs-volume-name "$APP_NAME" -o "$RAW_DMG" "$STAGE" >/dev/null
+    hdiutil convert "$RAW_DMG" -format UDZO -o "$DMG_PATH" >/dev/null
+    rm -f "$RAW_DMG"
     rm -rf "$STAGE"
     (cd "$ROOT/build" && ditto -c -k --keepParent "$APP_NAME.app" "$ZIP_PATH")
     (cd "$ROOT/build" && shasum -a 256 "$(basename "$DMG_PATH")" "$(basename "$ZIP_PATH")" > "$ARTIFACT-$VERSION.sha256")
