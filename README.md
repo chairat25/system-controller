@@ -14,7 +14,18 @@
 
 - macOS 15 (Sequoia) ขึ้นไป · Apple Silicon หรือ Intel
 
-## ติดตั้งด้วยคำสั่งเดียว (แนะนำ)
+## ติดตั้งแบบง่าย (3 ขั้น)
+
+1. เปิดแอป **Terminal** (กด ⌘ Space พิมพ์ `Terminal` แล้ว Enter)
+2. copy คำสั่งนี้ไปวาง แล้วกด Enter:
+   ```bash
+   curl -fsSL https://raw.githubusercontent.com/chairat25/system-controller/main/install.sh | bash
+   ```
+3. รอสักครู่ แอปเปิดเอง ไอคอนรูป slider ขึ้นใน menu bar ด้านบนขวา ถ้ามีหน้าต่างขออนุญาต กด **Allow**
+
+อัพเดตเวอร์ชันใหม่: รันคำสั่งเดิมอีกครั้ง (settings ยังอยู่) · ไม่อยากใช้ Terminal: ดู [ติดตั้งจาก DMG](#ติดตั้งจาก-dmg)
+
+## ติดตั้งด้วยคำสั่งเดียว (รายละเอียด)
 
 เปิด **Terminal** แล้ววาง:
 
@@ -24,7 +35,7 @@ curl -fsSL https://raw.githubusercontent.com/chairat25/system-controller/main/in
 
 สคริปต์โหลด release ล่าสุด, เช็ค SHA-256, ติดตั้งลง `/Applications` แล้วเปิดแอปให้ ไม่เจอหน้าต่าง "Apple could not verify…" เพราะไฟล์ที่โหลดผ่าน `curl` ไม่ถูกติด quarantine. รันซ้ำเพื่ออัพเดตเป็นเวอร์ชันใหม่ได้ (settings และเสียงที่ import ไว้ยังอยู่)
 
-ตัวเลือก: `SOUND_CONTROL_VERSION=1.2.0` เลือกเวอร์ชัน, `SOUND_CONTROL_DIR=~/Applications` เปลี่ยนที่ติดตั้ง, `SOUND_CONTROL_NO_OPEN=1` ไม่เปิดแอปหลังติดตั้ง เช่น `curl -fsSL …/install.sh | SOUND_CONTROL_NO_OPEN=1 bash`
+ตัวเลือก: `SOUND_CONTROL_VERSION=1.3.0` เลือกเวอร์ชัน, `SOUND_CONTROL_DIR=~/Applications` เปลี่ยนที่ติดตั้ง, `SOUND_CONTROL_NO_OPEN=1` ไม่เปิดแอปหลังติดตั้ง เช่น `curl -fsSL …/install.sh | SOUND_CONTROL_NO_OPEN=1 bash`
 
 ## เริ่มใช้งาน (ผู้ใช้ใหม่)
 
@@ -33,15 +44,15 @@ curl -fsSL https://raw.githubusercontent.com/chairat25/system-controller/main/in
 3. **Login Claude Code** ถ้ายังไม่เคย: เปิด terminal พิมพ์ `claude` แล้ว login หนึ่งครั้ง แอปใช้ login นี้อ่าน % ของ 5-hour window
 4. **ตั้งค่าตามที่ใช้**
    - Screen saver / ล็อกคีย์บอร์ด ต้องการ **Accessibility**: กดครั้งแรก macOS จะเด้งขอ → System Settings → Privacy & Security → Accessibility → เปิด System Controller
-   - คีย์ลัดเปิด screen saver: tab Screen Saver → SHORTCUT → กดปุ่มแล้วกดคีย์ (ต้องมี ⌘ ⌥ หรือ ⌃)
-   - เปิดแอปเองตอนเปิดเครื่อง: toggle **Launch at login** ท้าย popover
+   - คีย์ลัดเปิด screen saver: tab Screen Saver → ⚙️ → SHORTCUT → กดปุ่มแล้วกดคีย์ (ต้องมี ⌘ ⌥ หรือ ⌃)
+   - คีย์ลัดเปิด popup และ **Launch at login**: ปุ่ม ⚙️ ข้าง tab ด้านบนของ popup
 5. **เช็คว่าพร้อม** ที่ tab Dev ควรเห็น *Window left xx%* และ iTerm2 / Terminal เป็น **Allowed**
 
 ไม่ต้องติดตั้ง hook, status line หรือ script เพิ่ม แอปหา session, tmux และโฟลเดอร์ของ Claude Code (`$CLAUDE_CONFIG_DIR` หรือ `~/.claude`) เองบนแต่ละเครื่อง
 
 ## ติดตั้งจาก DMG
 
-1. โหลด `SoundControl-<version>.dmg` จากหน้า [Releases](https://github.com/chairat25/system-controller/releases/latest)
+1. โหลด `SystemController-<version>.dmg` จากหน้า [Releases](https://github.com/chairat25/system-controller/releases/latest)
 2. เปิด DMG แล้วลาก **System Controller** ไปวางที่ **Applications**
 3. เปิดครั้งแรก: แอปไม่ได้ notarize กับ Apple macOS จึงบล็อกไว้ ปลดได้ 2 วิธี
    - เปิดแอปหนึ่งครั้ง (จะขึ้นเตือน) กด **Done** → เปิด **System Settings → Privacy & Security** ใหม่ → ปุ่ม **Open Anyway** อยู่ใต้ "Allow applications from" (ขึ้นแค่ราว 1 ชั่วโมงหลังลองเปิด และต้องเปิดหน้า Settings ใหม่หลังลองเปิดแอป)
@@ -51,7 +62,7 @@ curl -fsSL https://raw.githubusercontent.com/chairat25/system-controller/main/in
      ```
 4. ไอคอนจะขึ้นใน menu bar
 
-ตรวจไฟล์ที่โหลดมา: `shasum -a 256 SoundControl-<version>.dmg` แล้วเทียบกับไฟล์ `.sha256` ใน release
+ตรวจไฟล์ที่โหลดมา: `shasum -a 256 SystemController-<version>.dmg` แล้วเทียบกับไฟล์ `.sha256` ใน release
 
 อัพเดตเวอร์ชัน: Quit แอปตัวเดิม → ลากตัวใหม่ไปทับใน Applications (settings และเสียงที่ import ไว้ยังอยู่) → ต้องให้สิทธิ์ Input Monitoring ใหม่ถ้าใช้ trigger คีย์บอร์ด/เมาส์
 
@@ -74,21 +85,28 @@ scripts/build-app.sh --universal --dmg   # แบบ release: Apple Silicon + In
 ## วิธีใช้
 
 ### Menu bar
-คลิกไอคอนใน menu bar:
+คลิกไอคอนใน menu bar (หรือกดคีย์ลัดที่ตั้งไว้ จะเปิดที่ tab Control กดซ้ำเพื่อปิด):
+- **⚙️ ข้าง tab** settings ของทั้งแอป: คีย์ลัด **Open this popup** (ใช้ได้จากทุกแอป) และ **Launch at login**
 - **สวิตช์ Listening** เปิด/ปิดเสียงทั้งหมดทีเดียว
 - **Volume** ระดับเสียงหลัก
 - **Pack** เปลี่ยน sound pack ที่ใช้อยู่
 - **Lock keyboard for cleaning** ล็อกคีย์บอร์ดไว้เช็ด โดยจอยังเปิด: ทุกปุ่ม (รวม modifier, ปุ่ม media/เสียง/ความสว่าง) ไม่ทำงาน, จอขึ้น overlay กันคลิกพลาดจาก trackpad. ปลดล็อกโดย **กดค้าง "Hold to unlock" 1 วินาที** ด้วยเมาส์/trackpad หรือรอ 10 นาทีปลดเอง. ระหว่างล็อกไม่เล่นเสียงคีย์บอร์ด. ครั้งแรกต้องให้สิทธิ์ **Accessibility**. ปุ่ม power และ Touch ID block ไม่ได้
 - **Recent** 5 event ล่าสุด
-- **Launch at login** · **Open…** (⌘,) เปิดหน้าต่างหลัก · **Quit** (⌘Q)
+- **Open…** (⌘,) เปิดหน้าต่างหลัก · **Quit** (⌘Q)
 
 ### Screen Saver
 ล็อกคีย์บอร์ดและคลุมทุกจอด้วย Smartheart Screen Saver โดยจอยังเปิด ปลดได้เฉพาะเจ้าของ: วางนิ้วบน Touch ID ที่โซนด้านล่างของจอ หรือใช้ **รหัสผ่าน login** ถ้าไม่มี Touch ID ไม่หมดเวลาเอง เริ่มได้จากปุ่ม **Start screen saver** หรือคีย์ลัดที่ตั้งไว้ (ใช้ได้จากทุกแอป)
 
-- **SHOW** เลือก widget: Clock, Calendar, Claude usage (token ของ 5-hour window และของวันนี้)
-- **Claude sessions** แสดง session ที่กำลังทำงาน: จุดเขียว + ชื่อเรื่องเดียวกับ tab ของ terminal + ข้อความบนหน้าจอ terminal แบบ realtime (iTerm2, Terminal, tmux; terminal อื่นใช้ข้อความจาก transcript) session ที่หยุดแล้วค้างไว้ราว 15 วินาทีแล้ว fade ออก ยกเว้นที่ **pin** ไว้ (คลิกที่แถวบน screen saver หรือติ๊กในรายการ) เลือกมุมที่แสดงได้ใน grid **Position** 4 มุม
-- **DIMMING** หรี่จอเองเมื่อไม่ขยับเมาส์: เริ่มหลัง (Start after), ใช้เวลาหรี่ (Fade over ตั้งแต่ทันทีถึง 1 ชั่วโมง), หรี่ถึงระดับ (Dim to, 0 = ดับ) และ **Bright clock only** ให้นาฬิกาค้างที่ความสว่างที่ตั้งไว้ขณะส่วนอื่นดับ ขยับเมาส์เพื่อให้สว่างกลับ
+หน้าแรกของ tab:
+- **SHOW** เลือก widget: Clock, Calendar, Claude usage (token ของ 5-hour window และของวันนี้), Claude sessions และมุมที่แสดงใน grid **Position** 4 มุม
+- **Mascot** สัตว์น่ารักเดินเล่นไปมาด้านล่างจอ เลือกได้ 5 ตัว: Cat, Puppy, Bunny, Panda, Penguin หรือ None (แสดงเฉพาะจอหลัก)
+- **Claude sessions** แสดงเป็นชิปชื่อ session ก่อน ประหยัดที่เมื่อมีหลาย session: คลิกชิปเพื่อกางดูหน้าจอ terminal แบบ realtime (iTerm2, Terminal, tmux; terminal อื่นใช้ข้อความจาก transcript) คลิกอีกครั้งเพื่อพับ จุดเขียว = กำลังทำงาน session ที่หยุดแล้วค้างไว้ราว 15 วินาทีแล้ว fade ออก ยกเว้นที่ **pin** ไว้ (ปุ่ม pin บนชิป หรือติ๊กในหน้า settings)
+
+ปุ่ม ⚙️ **Dimming, clock, shortcut, pins…** ด้านล่างเปิดหน้า settings:
+- **DIMMING** หรี่จอเองเมื่อไม่ขยับเมาส์: เริ่มหลัง (Start after), ใช้เวลาหรี่ (Fade over ตั้งแต่ทันทีถึง 1 ชั่วโมง), หรี่ถึงระดับ (Dim to, 0 = ดับ) ขยับเมาส์เพื่อให้สว่างกลับ
+- **STAY LIT** เลือกว่าอะไรสว่างค้างขณะส่วนอื่นหรี่: **Clock** และ **mascot** ติ๊กแล้วเลื่อนความสว่างแยกกันได้ (5–100%) mascot ที่ไม่ได้ติ๊กจะหยุดเดินเมื่อจอดับ (ประหยัด CPU)
 - **SHORTCUT** กดปุ่มแล้วกดคีย์ที่ต้องการ (Esc ยกเลิก, Delete หรือ Clear ลบ) ถ้าคีย์ซ้ำกับแอปอื่นจะขึ้นเตือน
+- **PINNED SESSIONS** ติ๊ก session ที่อยากให้ค้างบน screen saver
 
 ไม่ใช่ระบบกันเครื่องแบบ lock screen ของ macOS: force quit แอป (Cmd+Opt+Esc) ยังปิด overlay ได้ ถ้าต้องกันจริงใช้ Lock Screen (Control+Command+Q)
 
@@ -211,7 +229,8 @@ monitor แต่ละตัวเริ่มทำงานเฉพาะเ
 ```
 ~/Library/Application Support/SoundControl/
 ├── config.json        # การตั้งค่าเสียงทั้งหมด (ถ้าไฟล์เสีย จะ rename เป็น config.corrupt-<time>.json แล้วใช้ค่าเริ่มต้น)
-├── screensaver.json   # widget, dimming, คีย์ลัด, session ที่ pin, มุมที่แสดง
+├── app.json           # settings ของทั้งแอป (คีย์ลัดเปิด popup)
+├── screensaver.json   # widget, mascot, dimming, stay lit, คีย์ลัด, session ที่ pin, มุมที่แสดง
 ├── limit-guard.json   # 5-hour limit
 └── Sounds/            # ไฟล์เสียงที่ import (<uuid>.<ext>)
 

@@ -1,4 +1,4 @@
-// Renders the app icon (violet squircle + waveform symbol) into an .iconset folder.
+// Renders the app icon (violet squircle + control sliders symbol) into an .iconset folder.
 // Usage: swift scripts/make-icon.swift <output.iconset>
 import AppKit
 
@@ -24,7 +24,7 @@ func render(pixels: Int) -> Data? {
                         NSColor(red: 0.78, green: 0.45, blue: 1.0, alpha: 1)])?.draw(in: shape, angle: 60)
     let config = NSImage.SymbolConfiguration(pointSize: size * 0.42, weight: .bold)
         .applying(.init(paletteColors: [.white]))
-    if let symbol = NSImage(systemSymbolName: "waveform", accessibilityDescription: nil)?.withSymbolConfiguration(config) {
+    if let symbol = NSImage(systemSymbolName: "slider.horizontal.3", accessibilityDescription: nil)?.withSymbolConfiguration(config) {
         let symbolSize = symbol.size
         symbol.draw(in: NSRect(x: (size - symbolSize.width) / 2, y: (size - symbolSize.height) / 2,
                                width: symbolSize.width, height: symbolSize.height))

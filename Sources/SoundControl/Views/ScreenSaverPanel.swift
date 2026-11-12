@@ -1,16 +1,27 @@
 import SwiftUI
 import SoundControlCore
 
-/// Screen Saver tab of the menu-bar popover: what the Smartheart Screen Saver shows and how it dims.
+/// Screen Saver tab of the menu-bar popover: what the Smartheart Screen Saver shows. How it dims and the rest
+/// sit one click away in `ScreenSaverSettingsPage`, so the tab stays short.
 struct ScreenSaverPanel: View {
     @Environment(AppModel.self) private var model
 
-    private static let dimAfterChoices = [10, 30, 60, 120, 300, 600, 1800, 3600]
-    private static let fadeChoices = [0, 1, 3, 5, 10, 15, 30, 60, 120, 300, 600, 1800, 3600]
-
     private var settings: ScreenSaverSettings { model.screenSaver }
 
+    @State private var isShowingSettings = false
+
     var body: some View {
+        if isShowingSettings {
+            VStack(alignment: .leading, spacing: 12) {
+                SubpageHeader(title: "Screen Saver Settings") { isShowingSettings = false }
+                ScreenSaverSettingsPage()
+            }
+        } else {
+            mainPage
+        }
+    }
+
+    private var mainPage: some View {
         VStack(alignment: .leading, spacing: 12) {
             header
             Text("SHOW").font(.caption2.weight(.bold)).foregroundStyle(.secondary)
@@ -18,23 +29,11 @@ struct ScreenSaverPanel: View {
             widgetToggle("Calendar", systemImage: "calendar", widget: .calendar)
             widgetToggle("Claude usage", systemImage: "sparkle", widget: .claudeUsage)
             sessionsSection
-
-            Divider()
-            Text("DIMMING").font(.caption2.weight(.bold)).foregroundStyle(.secondary)
-            Toggle("Dim automatically", isOn: Binding(
-                get: { settings.isDimEnabled },
-                set: { value in model.updateScreenSaver { $0.withDimEnabled(value) } }))
-            dimControls.disabled(!settings.isDimEnabled)
-
-            Divider()
-            Text("SHORTCUT").font(.caption2.weight(.bold)).foregroundStyle(.secondary)
-            LabeledContent("Start screen saver") {
-                ShortcutRecorder(shortcut: settings.shortcut,
-                                 onChange: { value in model.updateScreenSaver { $0.withShortcut(value) } },
-                                 onRecordingChange: { model.setShortcutRecording($0) })
-            }
-            if let problem = model.shortcutProblem {
-                Text(problem).font(.caption).foregroundStyle(Theme.warning)
+            Picker(selection: Binding(get: { settings.mascot },
+                                      set: { value in model.updateScreenSaver { $0.withMascot(value) } })) {
+                ForEach(Mascot.allCases) { Text($0.title).tag($0) }
+            } label: {
+                Label("Mascot", systemImage: "pawprint")
             }
 
             Divider()
@@ -52,6 +51,13 @@ struct ScreenSaverPanel: View {
             }
             Text("Keys stay blocked and only your fingerprint or password gets you back in. Move the mouse to wake a dimmed screen.")
                 .font(.caption).foregroundStyle(.secondary)
+            Button {
+                isShowingSettings = true
+            } label: {
+                Label("Dimming, clock, shortcut, pins…", systemImage: "gearshape")
+            }
+            .buttonStyle(.borderless)
+            .font(.callout)
         }
     }
 
@@ -73,41 +79,7 @@ struct ScreenSaverPanel: View {
         }
     }
 
-    @ViewBuilder
-    private var dimControls: some View {
-        Picker("Start after", selection: Binding(
-            get: { settings.dimAfterSeconds },
-            set: { value in model.updateScreenSaver { $0.withDimAfter(seconds: value) } })) {
-            ForEach(Self.choices(Self.dimAfterChoices, including: settings.dimAfterSeconds), id: \.self) {
-                Text(Self.duration($0))
-            }
-        }
-        Picker("Fade over", selection: Binding(
-            get: { settings.fadeSeconds },
-            set: { value in model.updateScreenSaver { $0.withFade(seconds: value) } })) {
-            ForEach(Self.choices(Self.fadeChoices, including: settings.fadeSeconds), id: \.self) {
-                Text($0 == 0 ? "Instantly" : Self.duration($0))
-            }
-        }
-        VStack(alignment: .leading, spacing: 2) {
-            LabeledContent("Dim to", value: Self.levelLabel(settings.dimLevel))
-            Slider(value: Binding(
-                get: { settings.dimLevel },
-                set: { value in model.updateScreenSaver { $0.withDimLevel(value) } }), in: 0...1)
-        }
-        Toggle("Bright clock only", isOn: Binding(
-            get: { settings.isClockBright },
-            set: { value in model.updateScreenSaver { $0.withClockBright(value) } }))
-        VStack(alignment: .leading, spacing: 2) {
-            LabeledContent("Clock brightness", value: "\(Int((settings.clockLevel * 100).rounded()))%")
-            Slider(value: Binding(
-                get: { settings.clockLevel },
-                set: { value in model.updateScreenSaver { $0.withClockLevel(value) } }), in: 0.05...1)
-        }
-        .disabled(!settings.isClockBright)
-    }
-
-    /// Switch for the corner list, plus every running session so one can be pinned before the screen saver starts.
+    /// Switch for the corner list and the corner it sits in.
     @ViewBuilder
     private var sessionsSection: some View {
         Toggle(isOn: Binding(get: { settings.showsSessions },
@@ -119,40 +91,8 @@ struct ScreenSaverPanel: View {
                 CornerPicker(selection: settings.sessionsCorner,
                              onSelect: { corner in model.updateScreenSaver { $0.withSessionsCorner(corner) } })
             }
-        }
-        if settings.showsSessions, !model.sessions.board.sessions.isEmpty {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 2) {
-                    ForEach(model.sessions.board.sessions) { session in
-                        Toggle(isOn: Binding(
-                            get: { settings.isPinned(session.id) },
-                            set: { value in model.updateScreenSaver { $0.pinning(session.id, value) } })) {
-                            HStack(spacing: 6) {
-                                Circle().fill(session.isWorking ? Theme.working : Color.secondary.opacity(0.5))
-                                    .frame(width: 7, height: 7)
-                                Text(session.displayName).font(.caption).lineLimit(1)
-                            }
-                        }
-                        .toggleStyle(.checkbox)
-                    }
-                }
-            }
-            .frame(maxHeight: 110)
-            Text("Working sessions show a green dot in the chosen corner and fade out when they stop. Tick one to pin it.")
+            Text("Sessions show as name chips; click one on the screen saver to watch it live.")
                 .font(.caption).foregroundStyle(.secondary)
         }
-    }
-
-    /// The presets plus the saved value, so a custom value from the settings file still shows.
-    private static func choices(_ presets: [Int], including current: Int) -> [Int] {
-        presets.contains(current) ? presets : (presets + [current]).sorted()
-    }
-
-    private static func duration(_ seconds: Int) -> String {
-        seconds < 60 ? "\(seconds) sec" : "\(seconds / 60) min"
-    }
-
-    private static func levelLabel(_ level: Double) -> String {
-        level == 0 ? "No light" : "\(Int((level * 100).rounded()))%"
     }
 }

@@ -22,8 +22,9 @@ final class KeyboardLockOverlay {
             let panel = OverlayPanel(contentRect: screen.frame, styleMask: [.borderless, .nonactivatingPanel],
                                      backing: .buffered, defer: false)
             panel.level = .screenSaver
-            panel.isOpaque = false
-            panel.backgroundColor = .clear
+            // Both lock screens paint solid black edge to edge, so an opaque panel skips alpha compositing.
+            panel.isOpaque = true
+            panel.backgroundColor = .black
             panel.hasShadow = false
             panel.isReleasedWhenClosed = false
             panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary, .ignoresCycle]
@@ -67,7 +68,8 @@ private struct KeyboardLockView: View {
         switch lock.unlock {
         case .holdButton: cleaningLock
         case .ownerAuthentication:
-            ScreenSaverView(settings: settings, dimmer: dimmer) {
+            // One mascot, on the main display, is enough company and saves drawing on every screen.
+            ScreenSaverView(settings: settings, dimmer: dimmer, mascot: hasScanner ? settings.mascot : .none) {
                 OwnerUnlockControls(hasScanner: hasScanner, onUnlock: onUnlock, onPasswordPrompt: onPasswordPrompt)
             } corner: {
                 if settings.showsSessions, let sessions {

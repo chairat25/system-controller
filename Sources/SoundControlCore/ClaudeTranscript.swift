@@ -50,6 +50,9 @@ public enum ClaudeTranscript {
     private static let toolDetailKeys = ["description", "file_path", "pattern", "url", "query", "prompt", "command"]
     /// Tool calls beyond the newest few are dropped first, so a run of them cannot push a reply off the feed.
     private static let toolLineBudget = 3
+    /// The topic often sits far back in the tail. Once the feed is full, only lines holding this are parsed while
+    /// looking for it, since a byte search costs far less than parsing JSON.
+    private static let aiTitleMarker = Data(#""ai-title""#.utf8)
 
     public static func digest(inTail tail: Data, activityLimit: Int = 5) -> TranscriptDigest {
         var aiTitle: String?
@@ -57,8 +60,9 @@ public enum ClaudeTranscript {
         var newestFirst: [TranscriptLine] = []
 
         for line in tail.split(separator: newline).reversed() where line.count <= maximumLineBytes {
-            let isDone = aiTitle != nil && prompt != nil && newestFirst.count >= activityLimit * 3
-            if isDone { break }
+            let isFeedFull = prompt != nil && newestFirst.count >= activityLimit * 3
+            if isFeedFull, aiTitle != nil { break }
+            if isFeedFull, line.range(of: aiTitleMarker) == nil { continue }
             guard let object = try? JSONSerialization.jsonObject(with: Data(line)) as? [String: Any],
                   let type = object["type"] as? String else { continue }
             switch type {

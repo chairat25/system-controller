@@ -48,10 +48,15 @@ install_dir() {
 download_and_verify() {
     local version="$1" work="$2"
     local base="https://github.com/$REPO/releases/download/v$version"
-    local zip="SoundControl-$version.zip"
+    # Releases up to 1.2.0 were named SoundControl-<version>.*
+    local prefix="SystemController"
+    curl -fsSL -o "$work/checksums" "$base/$prefix-$version.sha256" 2>/dev/null || {
+        prefix="SoundControl"
+        curl -fsSL -o "$work/checksums" "$base/$prefix-$version.sha256" || fail "Could not fetch the checksum file."
+    }
+    local zip="$prefix-$version.zip"
     say "Downloading System Controller $version"
     curl -fL --progress-bar -o "$work/$zip" "$base/$zip" || fail "Download failed: $base/$zip"
-    curl -fsSL -o "$work/checksums" "$base/SoundControl-$version.sha256" || fail "Could not fetch the checksum file."
     say "Verifying checksum"
     (cd "$work" && grep "  $zip\$" checksums | shasum -a 256 -c - >/dev/null) \
         || fail "Checksum mismatch. The download may be corrupt; nothing was installed."

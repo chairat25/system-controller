@@ -47,12 +47,18 @@ public struct ScreenSaverSettings: Codable, Sendable, Equatable {
     /// Keeps the clock lit at `clockLevel` while everything else dims.
     public let isClockBright: Bool
     public let clockLevel: Double
+    /// The animal that strolls along the bottom of the main display, `.none` for no mascot.
+    public let mascot: Mascot
+    /// Keeps the mascot lit at `mascotLevel` while everything else dims, so it can still be seen playing.
+    public let isMascotBright: Bool
+    public let mascotLevel: Double
 
     public init(widgets: [ScreenSaverWidget], isDimEnabled: Bool, dimAfterSeconds: Int,
                 dimLevel: Double, fadeSeconds: Int, shortcut: KeyShortcut? = nil,
                 showsSessions: Bool = true, sessionsCorner: ScreenSaverCorner = .topLeft,
                 pinnedSessionIDs: [String] = [],
-                isClockBright: Bool = false, clockLevel: Double = 1) {
+                isClockBright: Bool = false, clockLevel: Double = 1, mascot: Mascot = .cat,
+                isMascotBright: Bool = false, mascotLevel: Double = 1) {
         // Rebuilt from `allCases` so the order is fixed and a widget can never appear twice.
         self.widgets = ScreenSaverWidget.allCases.filter(widgets.contains)
         self.isDimEnabled = isDimEnabled
@@ -66,6 +72,9 @@ public struct ScreenSaverSettings: Codable, Sendable, Equatable {
         self.pinnedSessionIDs = Array(pinnedSessionIDs.filter { seen.insert($0).inserted }.suffix(Self.maximumPins))
         self.isClockBright = isClockBright
         self.clockLevel = Self.unit(clockLevel, fallback: 1)
+        self.mascot = mascot
+        self.isMascotBright = isMascotBright
+        self.mascotLevel = Self.unit(mascotLevel, fallback: 1)
     }
 
     /// Missing or out-of-range fields fall back to defaults instead of failing the whole file.
@@ -86,7 +95,11 @@ public struct ScreenSaverSettings: Codable, Sendable, Equatable {
                 ?? fallback.sessionsCorner,
             pinnedSessionIDs: try container.decodeIfPresent([String].self, forKey: .pinnedSessionIDs) ?? [],
             isClockBright: try container.decodeIfPresent(Bool.self, forKey: .isClockBright) ?? fallback.isClockBright,
-            clockLevel: try container.decodeIfPresent(Double.self, forKey: .clockLevel) ?? fallback.clockLevel)
+            clockLevel: try container.decodeIfPresent(Double.self, forKey: .clockLevel) ?? fallback.clockLevel,
+            // An unknown animal falls back to the default instead of failing the whole file.
+            mascot: (try? container.decodeIfPresent(Mascot.self, forKey: .mascot)) ?? nil ?? fallback.mascot,
+            isMascotBright: try container.decodeIfPresent(Bool.self, forKey: .isMascotBright) ?? fallback.isMascotBright,
+            mascotLevel: try container.decodeIfPresent(Double.self, forKey: .mascotLevel) ?? fallback.mascotLevel)
     }
 
     public func shows(_ widget: ScreenSaverWidget) -> Bool {
@@ -110,6 +123,9 @@ public struct ScreenSaverSettings: Codable, Sendable, Equatable {
     public func withSessionsCorner(_ value: ScreenSaverCorner) -> Self { copy(sessionsCorner: value) }
     public func withClockBright(_ value: Bool) -> Self { copy(isClockBright: value) }
     public func withClockLevel(_ value: Double) -> Self { copy(clockLevel: value) }
+    public func withMascot(_ value: Mascot) -> Self { copy(mascot: value) }
+    public func withMascotBright(_ value: Bool) -> Self { copy(isMascotBright: value) }
+    public func withMascotLevel(_ value: Double) -> Self { copy(mascotLevel: value) }
 
     public func pinning(_ sessionID: String, _ isPinned: Bool) -> Self {
         let others = pinnedSessionIDs.filter { $0 != sessionID }
@@ -127,9 +143,14 @@ public struct ScreenSaverSettings: Codable, Sendable, Equatable {
         return 1 + (dimLevel - 1) * progress
     }
 
-    /// The clock follows the screen as it dims, then holds at `clockLevel` when "bright clock only" is on.
+    /// The clock follows the screen as it dims, then holds at `clockLevel` when it is kept lit.
     public func clockBrightness(screen: Double) -> Double {
         isClockBright ? max(screen, clockLevel) : screen
+    }
+
+    /// The mascot follows the screen as it dims, then holds at `mascotLevel` when it is kept lit.
+    public func mascotBrightness(screen: Double) -> Double {
+        isMascotBright ? max(screen, mascotLevel) : screen
     }
 
     private static func unit(_ value: Double, fallback: Double) -> Double {
@@ -140,17 +161,21 @@ public struct ScreenSaverSettings: Codable, Sendable, Equatable {
     private func copy(widgets: [ScreenSaverWidget]? = nil, isDimEnabled: Bool? = nil, dimAfterSeconds: Int? = nil,
                       dimLevel: Double? = nil, fadeSeconds: Int? = nil, shortcut: KeyShortcut?? = nil,
                       showsSessions: Bool? = nil, sessionsCorner: ScreenSaverCorner? = nil, pinnedSessionIDs: [String]? = nil,
-                      isClockBright: Bool? = nil, clockLevel: Double? = nil) -> Self {
+                      isClockBright: Bool? = nil, clockLevel: Double? = nil, mascot: Mascot? = nil,
+                      isMascotBright: Bool? = nil, mascotLevel: Double? = nil) -> Self {
         Self(widgets: widgets ?? self.widgets, isDimEnabled: isDimEnabled ?? self.isDimEnabled,
              dimAfterSeconds: dimAfterSeconds ?? self.dimAfterSeconds, dimLevel: dimLevel ?? self.dimLevel,
              fadeSeconds: fadeSeconds ?? self.fadeSeconds, shortcut: shortcut ?? self.shortcut,
              showsSessions: showsSessions ?? self.showsSessions, sessionsCorner: sessionsCorner ?? self.sessionsCorner,
              pinnedSessionIDs: pinnedSessionIDs ?? self.pinnedSessionIDs,
-             isClockBright: isClockBright ?? self.isClockBright, clockLevel: clockLevel ?? self.clockLevel)
+             isClockBright: isClockBright ?? self.isClockBright, clockLevel: clockLevel ?? self.clockLevel,
+             mascot: mascot ?? self.mascot, isMascotBright: isMascotBright ?? self.isMascotBright,
+             mascotLevel: mascotLevel ?? self.mascotLevel)
     }
 
     private enum CodingKeys: String, CodingKey {
         case widgets, isDimEnabled, dimAfterSeconds, dimLevel, fadeSeconds, shortcut
-        case showsSessions, sessionsCorner, pinnedSessionIDs, isClockBright, clockLevel
+        case showsSessions, sessionsCorner, pinnedSessionIDs, isClockBright, clockLevel, mascot
+        case isMascotBright, mascotLevel
     }
 }

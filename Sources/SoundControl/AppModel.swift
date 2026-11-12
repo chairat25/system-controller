@@ -27,6 +27,14 @@ final class AppModel {
     private(set) var limitGuardSettings = LimitGuardStore.load()
     /// Set when macOS refuses the screen saver shortcut, usually because another app already uses it.
     private(set) var shortcutProblem: String?
+    /// Settings for the whole app, edited from the gear next to the tabs.
+    private(set) var appSettings = AppSettingsStore.load()
+    /// Set when macOS refuses the popup shortcut.
+    private(set) var popupShortcutProblem: String?
+    /// The popup's open tab. The popup shortcut always opens on Control.
+    var menuTab: ModuleTab = .control
+    /// True while the popup shows the app settings instead of a tab.
+    var isShowingAppSettings = false
     let keyboardLock = KeyboardLockController()
     let sessions = ClaudeSessionMonitor()
     let terminalPermissions = TerminalPermissions()
@@ -36,6 +44,7 @@ final class AppModel {
     @ObservationIgnored private let library: SoundLibrary
     @ObservationIgnored private let engine = AudioEngine()
     @ObservationIgnored private var screenSaverHotKey: GlobalHotKey?
+    @ObservationIgnored private var popupHotKey: GlobalHotKey?
     @ObservationIgnored private var hub: MonitorHub?
     @ObservationIgnored private var lastPlayed: [TriggerID: Date] = [:]
     @ObservationIgnored private var lastIndex: [TriggerID: Int] = [:]
@@ -73,6 +82,7 @@ final class AppModel {
                 guard let self else { return }
                 self.installTerminationSignal()
                 self.installScreenSaverHotKey()
+                self.installPopupHotKey()
                 self.sessions.start(settings: { [weak self] in self?.limitGuardSettings ?? .default },
                                     idleSettings: { [weak self] in self?.idleCompact ?? .default })
                 self.terminalPermissions.start()
@@ -412,12 +422,50 @@ final class AppModel {
         shortcutProblem = isRegistered ? nil : "\(screenSaver.shortcut?.displayString ?? "That shortcut") is already used by macOS or another app. Pick a different one."
     }
 
-    /// While the recorder listens, the current shortcut is released so pressing it again records instead of locking.
+    /// While a recorder listens, every shortcut is released so pressing one records it instead of running it.
     func setShortcutRecording(_ isRecording: Bool) {
         if isRecording {
             screenSaverHotKey?.unregister()
+            popupHotKey?.unregister()
         } else {
             registerScreenSaverShortcut()
+            registerPopupShortcut()
+        }
+    }
+
+    // MARK: - App settings
+
+    func updateAppSettings(_ transform: (AppSettings) -> AppSettings) {
+        let next = transform(appSettings)
+        guard next != appSettings else { return }
+        let shortcutChanged = next.popupShortcut != appSettings.popupShortcut
+        appSettings = next
+        if shortcutChanged { registerPopupShortcut() }
+        do {
+            try AppSettingsStore.save(next)
+        } catch {
+            logger.error("Saving app settings failed: \(error.localizedDescription, privacy: .public)")
+            alertMessage = "Could not save the settings: \(error.localizedDescription)"
+        }
+    }
+
+    private func installPopupHotKey() {
+        popupHotKey = GlobalHotKey { [weak self] in self?.togglePopup() }
+        registerPopupShortcut()
+    }
+
+    private func registerPopupShortcut() {
+        guard let hotKey = popupHotKey else { return }
+        let isRegistered = hotKey.register(appSettings.popupShortcut)
+        popupShortcutProblem = isRegistered ? nil : "\(appSettings.popupShortcut?.displayString ?? "That shortcut") is already used by macOS, another app or the screen saver. Pick a different one."
+    }
+
+    /// Opens the popup on the Control tab, or closes it when it is already open.
+    private func togglePopup() {
+        menuTab = .control
+        isShowingAppSettings = false
+        if !MenuBarPopup.toggle() {
+            logger.error("Could not find the menu-bar item to open the popup")
         }
     }
 

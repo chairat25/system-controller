@@ -41,6 +41,8 @@ final class ScreenSaverDimmer {
             lastMouse = mouse
             lastActivity = now
         }
-        brightness = settings.brightness(idle: now.timeIntervalSince(lastActivity))
+        let next = settings.brightness(idle: now.timeIntervalSince(lastActivity))
+        // Every write redraws all screens, so the steady value is only written once.
+        if next != brightness { brightness = next }
     }
 }

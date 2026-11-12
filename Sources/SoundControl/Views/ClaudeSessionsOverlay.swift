@@ -1,13 +1,12 @@
 import SwiftUI
 import SoundControlCore
 
-/// A corner of the screen saver (the owner picks which): a card per Claude session that is working, with a green dot, the
-/// session's topic and a terminal-style feed of what it is saying and doing right now.
-/// A session that stops fades out, unless it is pinned. Click the header to pin or unpin it.
+/// A corner of the screen saver (the owner picks which): a name chip per Claude session that is working, with a green dot.
+/// Many sessions stay small this way; click a chip to open its live terminal view, click again to fold it.
+/// A session that stops fades out, unless it is pinned with the pin button.
 struct ClaudeSessionsOverlay: View {
     private static let fade = Animation.easeOut(duration: 1.2)
-    /// Beyond this many cards the rest show only their header, so a busy Mac does not fill the screen.
-    private static let feedCards = 3
+    private static let feedWidth: CGFloat = 520
 
     let monitor: ClaudeSessionMonitor
     let corner: ScreenSaverCorner
@@ -26,21 +25,27 @@ struct ClaudeSessionsOverlay: View {
         TimelineView(.periodic(from: .now, by: 1)) { context in
             let rows = monitor.board.visible(pinned: pinned, now: context.date)
             VStack(alignment: corner.horizontalAlignment, spacing: 8) {
-                ForEach(Array(rows.enumerated()), id: \.element.id) { index, row in
-                    SessionCard(row: row, lines: index < Self.feedCards ? monitor.activity[row.id] ?? [] : [],
-                                screen: index < Self.feedCards ? monitor.screens[row.id] ?? [] : [],
-                                showsFeed: index < Self.feedCards) { toggle(row) }
-                        .frame(width: 520, alignment: .leading)
+                ForEach(rows) { row in
+                    let isExpanded = monitor.expanded.contains(row.id)
+                    SessionCard(row: row, isExpanded: isExpanded,
+                                lines: isExpanded ? monitor.activity[row.id] ?? [] : [],
+                                screen: isExpanded ? monitor.screens[row.id] ?? [] : [],
+                                alignment: corner.horizontalAlignment,
+                                onToggle: { monitor.toggleExpanded(row.id) },
+                                onPin: { togglePin(row) })
+                        .frame(width: isExpanded ? Self.feedWidth : nil,
+                               alignment: corner.isLeft ? .leading : .trailing)
                         .transition(.opacity)
                 }
             }
             .animation(Self.fade, value: rows.map(\.id))
+            .animation(.easeOut(duration: 0.25), value: monitor.expanded)
         }
         .onAppear { monitor.beginWatching() }
         .onDisappear { monitor.endWatching() }
     }
 
-    private func toggle(_ row: ClaudeSessionBoard.Row) {
+    private func togglePin(_ row: ClaudeSessionBoard.Row) {
         let isPinned = !row.isPinned
         pinned = isPinned ? pinned + [row.id] : pinned.filter { $0 != row.id }
         onPin(row.id, isPinned)
@@ -49,43 +54,62 @@ struct ClaudeSessionsOverlay: View {
 
 private struct SessionCard: View {
     let row: ClaudeSessionBoard.Row
+    let isExpanded: Bool
     let lines: [TranscriptLine]
     /// The terminal's own text. When there is some it replaces the transcript feed, because it also shows the reply as it streams in.
     let screen: [String]
-    let showsFeed: Bool
-    let onTap: () -> Void
+    let alignment: HorizontalAlignment
+    let onToggle: () -> Void
+    let onPin: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            header
-            if showsFeed, !screen.isEmpty {
+        VStack(alignment: alignment, spacing: 6) {
+            chip
+            if isExpanded, !screen.isEmpty {
                 mirror
-            } else if showsFeed, !lines.isEmpty || row.session.isWorking {
+            } else if isExpanded {
                 feed
             }
         }
     }
 
-    private var header: some View {
-        Button(action: onTap) {
-            HStack(spacing: 10) {
-                StatusDot(isWorking: row.session.isWorking)
-                VStack(alignment: .leading, spacing: 0) {
-                    Text(row.session.displayName).font(.callout.weight(.medium)).lineLimit(1)
-                    if row.session.title != nil {
-                        Text(row.session.name).font(.caption2).foregroundStyle(.secondary)
+    private var chip: some View {
+        HStack(spacing: 8) {
+            Button(action: onToggle) {
+                HStack(spacing: 8) {
+                    StatusDot(isWorking: row.session.isWorking)
+                    Text(isExpanded ? row.session.displayName : Self.short(row.session.displayName))
+                        .font(.callout.weight(.medium)).lineLimit(1)
+                    if isExpanded, row.session.title != nil {
+                        Text(row.session.name).font(.caption2).foregroundStyle(.secondary).lineLimit(1)
                     }
+                    Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
+                        .font(.caption2.weight(.semibold)).foregroundStyle(.secondary)
                 }
-                if row.isPinned {
-                    Image(systemName: "pin.fill").font(.caption2).foregroundStyle(.secondary)
-                }
+                .contentShape(Rectangle())
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 6)
-            .background(Color.white.opacity(0.07), in: Capsule())
+            .buttonStyle(.plain)
+            .help(isExpanded ? "Fold" : "Watch it live")
+            Button(action: onPin) {
+                Image(systemName: row.isPinned ? "pin.fill" : "pin")
+                    .font(.caption2)
+                    .foregroundStyle(row.isPinned ? .white : .secondary)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .help(row.isPinned ? "Unpin" : "Pin to keep it here")
         }
-        .buttonStyle(.plain)
-        .help(row.isPinned ? "Unpin" : "Pin to keep it here")
+        .padding(.horizontal, 12)
+        .padding(.vertical, 6)
+        .fixedSize(horizontal: !isExpanded, vertical: false)
+        .background(Color.white.opacity(0.07), in: Capsule())
+    }
+
+    /// A folded chip sizes to its name, so a long topic is cut to keep the chips small.
+    private static let chipNameLength = 40
+
+    private static func short(_ name: String) -> String {
+        name.count <= chipNameLength ? name : String(name.prefix(chipNameLength - 1)) + "…"
     }
 
     /// The terminal's own lines, as they are on screen right now.
@@ -115,6 +139,9 @@ private struct SessionCard: View {
     /// Looks like the terminal the session runs in: `❯` for what you typed, `●` for the reply, dimmer tool calls.
     private var feed: some View {
         VStack(alignment: .leading, spacing: 3) {
+            if lines.isEmpty, !row.session.isWorking {
+                Text("Nothing new yet").font(.system(size: 11, design: .monospaced)).foregroundStyle(.secondary)
+            }
             ForEach(Array(lines.enumerated()), id: \.offset) { _, line in
                 Text(Self.glyph(line.kind) + line.text)
                     .font(.system(size: 11, weight: line.kind == .user ? .semibold : .regular, design: .monospaced))

@@ -39,6 +39,8 @@ final class KeyboardLockController {
         overlay?.close()
         overlay = nil
         lock = nil
+        // Full-screen views on every display leave a lot of freed heap behind; give those pages back now.
+        DispatchQueue.main.async { malloc_zone_pressure_relief(nil, 0) }
     }
 
     private func startLock(_ unlock: UnlockMethod, screenSaver: ScreenSaverSettings, sessions: ClaudeSessionMonitor?,

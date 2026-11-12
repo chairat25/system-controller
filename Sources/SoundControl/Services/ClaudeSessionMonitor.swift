@@ -12,7 +12,7 @@ import SoundControlCore
 @Observable
 final class ClaudeSessionMonitor {
     private static let pollInterval: TimeInterval = 1
-    /// Reading a terminal costs a fraction of a second, so only a few of the busiest sessions are mirrored.
+    /// Reading a terminal costs a fraction of a second, so at most a few expanded sessions are mirrored.
     private static let mirroredSessions = 3
     private static let mirroredLines = 12
     private static let quotaInterval: TimeInterval = 60
@@ -21,8 +21,10 @@ final class ClaudeSessionMonitor {
     private(set) var board = ClaudeSessionBoard.empty
     /// Latest messages and tool calls per session id, for the terminal-style feed.
     private(set) var activity: [String: [TranscriptLine]] = [:]
-    /// The terminal's own text per session id, newest lines last. Only filled while the screen saver is up.
+    /// The terminal's own text per session id, newest lines last. Only filled for expanded sessions while the screen saver is up.
     private(set) var screens: [String: [String]] = [:]
+    /// Sessions opened on the screen saver to watch live. Shared by every display; cleared when the screen saver closes.
+    private(set) var expanded: Set<String> = []
     private(set) var quota: ClaudeQuota?
     /// Why the quota is unknown, shown in the Dev tab.
     private(set) var quotaProblem: String?
@@ -64,15 +66,28 @@ final class ClaudeSessionMonitor {
 
     func endWatching() {
         watchers = max(watchers - 1, 0)
-        if watchers == 0 { screens = [:] }
+        guard watchers == 0 else { return }
+        if !screens.isEmpty { screens = [:] }
+        if !expanded.isEmpty { expanded = [] }
     }
+
+    /// Opens a session's live view on the screen saver, or folds it back to its name chip.
+    func toggleExpanded(_ id: String) {
+        expanded = expanded.contains(id) ? expanded.subtracting([id]) : expanded.union([id])
+        captureScreens()
+    }
+
+    /// Feeds are read every second only while someone is looking at one.
+    private var isFeedVisible: Bool { watchers > 0 && !expanded.isEmpty }
 
     private func captureScreens() {
         guard watchers > 0, !isCapturing else { return }
-        let targets = board.sessions.filter { $0.isActive(now: Date(), grace: ClaudeSessionBoard.lingerSeconds) }
-            .prefix(Self.mirroredSessions)
+        let targets = board.sessions.filter {
+            expanded.contains($0.id) && $0.isActive(now: Date(), grace: ClaudeSessionBoard.lingerSeconds)
+        }
+        .prefix(Self.mirroredSessions)
         guard !targets.isEmpty else {
-            screens = [:]
+            if !screens.isEmpty { screens = [:] }
             return
         }
         isCapturing = true
@@ -82,19 +97,22 @@ final class ClaudeSessionMonitor {
             guard let self else { return }
             isCapturing = false
             guard watchers > 0 else { return }
-            screens = Dictionary(captured.compactMap { pid, text in
+            let next = Dictionary(captured.compactMap { pid, text in
                 idsByPid[pid].map { ($0, TerminalScreen.conversationTail(text, limit: Self.mirroredLines)) }
             }, uniquingKeysWith: { first, _ in first })
+            if next != screens { screens = next }
         }
     }
 
     private func scan() {
         let now = Date()
-        let reading = transcripts.read(ClaudeSession.collapsed(Self.readSessions()), now: now)
+        let reading = transcripts.read(ClaudeSession.collapsed(Self.readSessions()), now: now, isWatched: isFeedVisible)
         let sessions = reading.sessions
-        activity = reading.activity
+        // Observation redraws every reader on any assignment, so unchanged values are not written back each second.
+        if reading.activity != activity { activity = reading.activity }
         captureScreens()
-        board = board.updated(with: sessions, now: now)
+        let nextBoard = board.updated(with: sessions, now: now)
+        if nextBoard != board { board = nextBoard }
         refreshQuota(now: now)
         let (next, actions) = limitGuard.advancing(
             quota: quota, sessions: sessions, settings: settings(),

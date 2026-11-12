@@ -2,11 +2,13 @@ import SwiftUI
 import SoundControlCore
 
 /// The Smartheart Screen Saver: title on top, the chosen widgets in the middle, the owner's
-/// fingerprint zone at the bottom and the working Claude sessions in the corner the owner picked.
-/// The screen dims with `dimmer`; with "bright clock only" the clock holds its own level while the rest goes dark.
+/// fingerprint zone at the bottom, the working Claude sessions in the corner the owner picked and a mascot strolling below.
+/// The screen dims with `dimmer`; the clock and the mascot can each hold their own level while the rest goes dark.
 struct ScreenSaverView<Unlock: View, Corner: View>: View {
     let settings: ScreenSaverSettings
     let dimmer: ScreenSaverDimmer
+    /// The animal strolling along the bottom; `.none` on screens that should not have one.
+    let mascot: Mascot
     @ViewBuilder let unlock: () -> Unlock
     @ViewBuilder let corner: () -> Corner
 
@@ -24,6 +26,14 @@ struct ScreenSaverView<Unlock: View, Corner: View>: View {
             }
             .padding(.top, Layout.topInset)
             .padding(.horizontal, Layout.sideInset)
+            if mascot != .none {
+                let light = settings.mascotBrightness(screen: screen)
+                MascotStroll(mascot: mascot, isPaused: light < Layout.darkEnough)
+                    .padding(.horizontal, Layout.sideInset)
+                    .padding(.bottom, Layout.mascotInset)
+                    .frame(maxHeight: .infinity, alignment: .bottom)
+                    .opacity(light)
+            }
             corner()
                 .padding(Layout.cornerInset)
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: settings.sessionsCorner.alignment)
@@ -67,4 +77,7 @@ private enum Layout {
     static let bottomInset: CGFloat = 64
     static let sideInset: CGFloat = 48
     static let cornerInset: CGFloat = 28
+    static let mascotInset: CGFloat = 4
+    /// Below this brightness the mascot cannot be seen, so it stops drawing.
+    static let darkEnough = 0.02
 }

@@ -96,6 +96,17 @@ struct ClaudeTranscriptTests {
         #expect(digest.title == "การอนุมัติคำสั่งซื้อผ่าน Genie")
     }
 
+    @Test("finds an ai-title far behind a full feed, and keeps the feed")
+    func titleBehindFullFeed() {
+        let replies = (1...40).map { assistant(#"{"type":"text","text":"reply \#($0)"}"#) }
+        let digest = ClaudeTranscript.digest(inTail: tail(
+            [#"{"type":"ai-title","aiTitle":"Far topic"}"#, user("start")] + replies + [user("latest")]))
+        #expect(digest.aiTitle == "Far topic")
+        #expect(digest.prompt == "latest")
+        #expect(digest.activity.last?.text == "latest")
+        #expect(digest.activity.count == 5)
+    }
+
     @Test("without an ai-title the latest prompt names the session")
     func promptFallback() {
         let digest = ClaudeTranscript.digest(inTail: tail([user("first"), user("ขอทดสอบนิดนึงนะ")]))

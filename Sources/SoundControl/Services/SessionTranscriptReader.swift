@@ -29,19 +29,20 @@ final class SessionTranscriptReader {
     private var entries: [String: Entry] = [:]
 
     /// The sessions with their topics filled in, and each session's latest activity. Closed sessions are forgotten.
-    func read(_ sessions: [ClaudeSession], now: Date) -> Reading {
+    /// While nothing shows the feed (`isWatched` false) every session uses the slow refresh, since only titles are needed.
+    func read(_ sessions: [ClaudeSession], now: Date, isWatched: Bool) -> Reading {
         let open = Set(sessions.map(\.id))
         entries = entries.filter { open.contains($0.key) }
         var activity: [String: [TranscriptLine]] = [:]
         let titled = sessions.map { session -> ClaudeSession in
-            let digest = refresh(session, now: now)
+            let digest = refresh(session, now: now, isWatched: isWatched)
             activity[session.id] = digest.activity
             return session.withTitle(digest.title)
         }
         return Reading(sessions: titled, activity: activity)
     }
 
-    private func refresh(_ session: ClaudeSession, now: Date) -> TranscriptDigest {
+    private func refresh(_ session: ClaudeSession, now: Date, isWatched: Bool) -> TranscriptDigest {
         var entry = entries[session.id] ?? Entry(file: nil, modified: nil, checkedAt: .distantPast, digest: .empty)
         defer { entries[session.id] = entry }
         if entry.file == nil {
@@ -50,7 +51,7 @@ final class SessionTranscriptReader {
             entry.file = findTranscript(session.id)
         }
         guard let file = entry.file else { return entry.digest }
-        let isActive = session.isActive(now: now, grace: Self.activeGrace)
+        let isActive = isWatched && session.isActive(now: now, grace: Self.activeGrace)
         let interval = isActive ? Self.activeRefresh : Self.restingRefresh
         let isFirstRead = entry.digest == .empty
         guard isFirstRead || now.timeIntervalSince(entry.checkedAt) >= interval else { return entry.digest }
@@ -58,7 +59,10 @@ final class SessionTranscriptReader {
         guard isFirstRead || modified != entry.modified else { return entry.digest }
         entry.checkedAt = now
         entry.modified = modified
-        if let tail = readTail(file) { entry.digest = ClaudeTranscript.digest(inTail: tail) }
+        // Parsed objects are autoreleased; draining here keeps each read's garbage from piling up.
+        if let digest = autoreleasepool(invoking: { readTail(file).map { ClaudeTranscript.digest(inTail: $0) } }) {
+            entry.digest = digest
+        }
         return entry.digest
     }
 
