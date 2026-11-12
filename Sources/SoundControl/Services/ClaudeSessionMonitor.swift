@@ -1,3 +1,4 @@
+import CoreGraphics
 import Foundation
 import Observation
 import OSLog
@@ -155,7 +156,11 @@ final class ClaudeSessionMonitor {
 
     private func compactIdle(_ sessions: [ClaudeSession], now: Date) {
         var settings = idleSettings()
-        if hasIdleCompactHook { settings = settings.withEnabled(false) }
+        // The owner may be typing a prompt that is not sent yet; /compact would land in the middle of it.
+        // Holding off keeps the session armed, so it fires once the keyboard and mouse sit still.
+        if hasIdleCompactHook || Self.secondsSinceInput() < Self.inputQuietSeconds {
+            settings = settings.withEnabled(false)
+        }
         let (next, due) = idleCompactor.advancing(sessions: sessions, settings: settings, now: now)
         idleCompactor = next
         for session in due {
@@ -165,6 +170,14 @@ final class ClaudeSessionMonitor {
                     : "Could not reach the terminal of \(session.displayName)"
             }
         }
+    }
+
+    private static let inputQuietSeconds: TimeInterval = 120
+
+    /// Seconds since the last key press, click or mouse move anywhere on this Mac.
+    private static func secondsSinceInput() -> TimeInterval {
+        guard let anyInput = CGEventType(rawValue: ~0) else { return .infinity }
+        return CGEventSource.secondsSinceLastEventType(.combinedSessionState, eventType: anyInput)
     }
 
     /// An older setup does idle /compact from a Stop hook in Claude Code's settings. Doing it twice would waste quota.

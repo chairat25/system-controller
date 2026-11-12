@@ -35,7 +35,7 @@ curl -fsSL https://raw.githubusercontent.com/chairat25/system-controller/main/in
 
 สคริปต์โหลด release ล่าสุด, เช็ค SHA-256, ติดตั้งลง `/Applications` แล้วเปิดแอปให้ ไม่เจอหน้าต่าง "Apple could not verify…" เพราะไฟล์ที่โหลดผ่าน `curl` ไม่ถูกติด quarantine. รันซ้ำเพื่ออัพเดตเป็นเวอร์ชันใหม่ได้ (settings และเสียงที่ import ไว้ยังอยู่)
 
-ตัวเลือก: `SOUND_CONTROL_VERSION=1.3.0` เลือกเวอร์ชัน, `SOUND_CONTROL_DIR=~/Applications` เปลี่ยนที่ติดตั้ง, `SOUND_CONTROL_NO_OPEN=1` ไม่เปิดแอปหลังติดตั้ง เช่น `curl -fsSL …/install.sh | SOUND_CONTROL_NO_OPEN=1 bash`
+ตัวเลือก: `SOUND_CONTROL_VERSION=1.3.1` เลือกเวอร์ชัน, `SOUND_CONTROL_DIR=~/Applications` เปลี่ยนที่ติดตั้ง, `SOUND_CONTROL_NO_OPEN=1` ไม่เปิดแอปหลังติดตั้ง เช่น `curl -fsSL …/install.sh | SOUND_CONTROL_NO_OPEN=1 bash`
 
 ## เริ่มใช้งาน (ผู้ใช้ใหม่)
 
