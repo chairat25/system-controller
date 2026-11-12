@@ -5,10 +5,20 @@
 ## [Unreleased]
 
 ### Added
-- `install.sh`: ติดตั้งด้วยคำสั่งเดียว `curl -fsSL https://raw.githubusercontent.com/chairat25/sound-noi/main/install.sh | bash` โหลด release ล่าสุด, เช็ค SHA-256 และ code signature, ปิดตัวเก่าที่รันอยู่ (คืนเสียง macOS ก่อน) แล้วติดตั้งและเปิดแอป ไม่เจอ Gatekeeper prompt
+- **Lock keyboard for cleaning** ใน menu bar: ล็อกคีย์บอร์ดไว้เช็ดโดยไม่ต้องปิดจอ. block ทุกปุ่มรวม modifier และปุ่ม media/เสียง/ความสว่าง, overlay ทุกจอกันคลิกพลาดจาก trackpad, ปลดล็อกด้วยการกดค้าง "Hold to unlock" 1 วินาที หรือปลดเองหลัง 10 นาที (กันกรณีเมาส์ใช้ไม่ได้), ไม่เล่นเสียงคีย์บอร์ดระหว่างล็อก. ต้องให้สิทธิ์ Accessibility (Settings → Permissions มีปุ่มเปิดหน้านั้น)
+- **Lock for owner (screen stays on)** ใน menu bar: ล็อกคีย์บอร์ด+overlay เหมือน Lock keyboard for cleaning แต่ปลดด้วย **"Unlock as owner"** → Touch ID ขึ้นในหน้าล็อค (ไม่มี popup) หรือ prompt รหัสผ่าน login ถ้าไม่มี Touch ID แทนการกดค้าง. ไม่หมดเวลาเอง. ระหว่าง prompt รหัสผ่านให้ key ผ่านไปพิมพ์ได้. ไม่มีรหัสผ่าน login จะล็อกไม่ได้ (แสดงข้อความให้ตั้งก่อน). `UnlockMethod` ใน Core, `OwnerAuth` ใน Services (LocalAuthentication). ไม่ใช่ lock screen ของ macOS: force quit Sound Control ยังปลดได้
+- `install.sh`: ติดตั้งด้วยคำสั่งเดียว `curl -fsSL https://raw.githubusercontent.com/chairat25/system-controller/main/install.sh | bash` โหลด release ล่าสุด, เช็ค SHA-256 และ code signature, ปิดตัวเก่าที่รันอยู่ (คืนเสียง macOS ก่อน) แล้วติดตั้งและเปิดแอป ไม่เจอ Gatekeeper prompt
 
 ### Changed
+- เปลี่ยนชื่อแอปเป็น **System Controller** (bundle id `com.pond.soundcontrol` เดิม เพื่อให้สิทธิ์ที่ให้ไว้ยังอยู่). หน้าต่างหลักเป็น tab: tab แรก Sound Control, tab ถัดไปเพิ่มเป็น module ใหม่ได้ใน `ModuleTab`
+- Keyboard lock overlay ทึบสนิท (สีดำ 100% จากเดิม 72%) ทั้งจอหลักและจอรอง ไม่เห็นว่าเปิดอะไรอยู่ใต้ overlay
+- Lock for owner: Touch ID แสดงในหน้าล็อคเป็นไอคอนสแกนพร้อม animation วงแหวนตอนรอนิ้ว แทน popup กลางจอ. มี "Use password" กับ "Cancel" ระหว่างสแกน. Mac ที่ไม่มี Touch ID ใช้ prompt รหัสผ่านของ macOS เหมือนเดิม
 - README: ขั้นตอน Open Anyway ชัดขึ้น (ปุ่มขึ้นใต้ "Allow applications from" หลังลองเปิดแอป และต้องเปิดหน้า Settings ใหม่)
+
+### Fixed
+- แอป crash เองตอนพับจอ: ระหว่าง DarkWake (Mac ตื่นแปปเดียวตอนจอพับ) Wi-Fi reconnect ทำให้ trigger network ยิง แล้ว AVFAudio throw exception เพราะยังไม่มี audio output → แอปปิดไปเอง
+  - ไม่เล่นเสียงระหว่าง Mac หลับ/DarkWake (เสียง "Mac sleeps" ยังเล่นได้ภายใน 5 วินาทีแรก) Activity log ขึ้น "Mac is asleep"
+  - เช็คว่ามี output device ก่อนเล่น และดัก exception จาก AVFAudio (target `ObjCExceptionCatcher`) ถ้าเล่นไม่ได้แค่ข้ามเสียงนั้น แอปไม่ตาย
 
 ## [1.2.0] - 2026-10-22
 

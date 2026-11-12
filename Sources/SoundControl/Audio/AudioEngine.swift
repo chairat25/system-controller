@@ -1,5 +1,6 @@
 import AVFoundation
 import CoreGraphics
+import ObjCExceptionCatcher
 import OSLog
 
 /// Low-latency, polyphonic playback: a small pool of player nodes on one engine.
@@ -51,19 +52,38 @@ final class AudioEngine {
         tick()
     }
 
-    func play(_ buffer: AVAudioPCMBuffer, gain: Float) {
-        guard gain > 0, startIfNeeded() else { return }
+    /// - Returns: false when there is no usable output right now; the sound is dropped.
+    @discardableResult
+    func play(_ buffer: AVAudioPCMBuffer, gain: Float) -> Bool {
+        guard gain > 0 else { return true }
+        guard hasOutputDevice, startIfNeeded() else { return false }
         let player = players[nextVoice]
         nextVoice = (nextVoice + 1) % players.count
-        player.stop()
-        player.volume = min(max(gain, 0), 1)
-        player.scheduleBuffer(buffer, at: nil, options: .interrupts)
-        player.play()
+        var error: NSError?
+        let didStart = SCTryObjC({
+            player.stop()
+            player.volume = min(max(gain, 0), 1)
+            player.scheduleBuffer(buffer, at: nil, options: .interrupts)
+            player.play()
+        }, &error)
+        guard didStart else {
+            // The engine thinks it is running but the device went away underneath it.
+            logger.error("Playback failed: \(error?.localizedDescription ?? "unknown", privacy: .public)")
+            engine.stop()
+            return false
+        }
         lastPlay = Date()
+        return true
     }
 
     func stopAll() {
         players.forEach { $0.stop() }
+    }
+
+    /// While the Mac sleeps or dark-wakes the output can report zero channels.
+    private var hasOutputDevice: Bool {
+        let format = engine.outputNode.outputFormat(forBus: 0)
+        return format.channelCount > 0 && format.sampleRate > 0
     }
 
     private func startIfNeeded() -> Bool {

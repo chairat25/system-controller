@@ -18,11 +18,11 @@ struct SoundControlApp: App {
         MenuBarExtra {
             MenuBarView().environment(model)
         } label: {
-            Image(systemName: model.config.isListening ? "waveform.circle.fill" : "waveform.circle")
+            Image(systemName: "slider.horizontal.3")
         }
         .menuBarExtraStyle(.window)
 
-        Window("Sound Control", id: "main") {
+        Window("System Controller", id: "main") {
             MainWindow().environment(model)
         }
         .defaultSize(width: 980, height: 720)

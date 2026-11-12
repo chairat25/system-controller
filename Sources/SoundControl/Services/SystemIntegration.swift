@@ -21,6 +21,10 @@ enum PrivacySettings {
         open("x-apple.systempreferences:com.apple.preference.security?Privacy_ListenEvent")
     }
 
+    static func openAccessibility() {
+        open("x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")
+    }
+
     static func openBluetooth() {
         open("x-apple.systempreferences:com.apple.preference.security?Privacy_Bluetooth")
     }

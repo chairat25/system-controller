@@ -19,16 +19,39 @@ final class AppModel {
     var alertMessage: String?
     private(set) var isLaunchAtLoginEnabled = LoginItem.isEnabled
     private(set) var hasInputPermission = InputMonitor.hasPermission
+    /// Stop-hook settings for auto /compact, edited from the Dev tab.
+    private(set) var idleCompact = IdleCompactStore.load()
+    /// What the owner-lock screen saver shows and how it dims, edited from the Screen Saver tab.
+    private(set) var screenSaver = ScreenSaverStore.load()
+    /// When to hand off and /compact working sessions as the five-hour quota runs out, edited from the Dev tab.
+    private(set) var limitGuardSettings = LimitGuardStore.load()
+    /// Set when macOS refuses the screen saver shortcut, usually because another app already uses it.
+    private(set) var shortcutProblem: String?
+    /// Settings for the whole app, edited from the gear next to the tabs.
+    private(set) var appSettings = AppSettingsStore.load()
+    /// Set when macOS refuses the popup shortcut.
+    private(set) var popupShortcutProblem: String?
+    /// The popup's open tab. The popup shortcut always opens on Control.
+    var menuTab: ModuleTab = .control
+    /// True while the popup shows the app settings instead of a tab.
+    var isShowingAppSettings = false
+    let keyboardLock = KeyboardLockController()
+    let sessions = ClaudeSessionMonitor()
+    let terminalPermissions = TerminalPermissions()
 
     @ObservationIgnored private let store: ConfigStore
     @ObservationIgnored private let soundStore: UserSoundStore
     @ObservationIgnored private let library: SoundLibrary
     @ObservationIgnored private let engine = AudioEngine()
+    @ObservationIgnored private var screenSaverHotKey: GlobalHotKey?
+    @ObservationIgnored private var popupHotKey: GlobalHotKey?
     @ObservationIgnored private var hub: MonitorHub?
     @ObservationIgnored private var lastPlayed: [TriggerID: Date] = [:]
     @ObservationIgnored private var lastIndex: [TriggerID: Int] = [:]
     /// Start of the last non-chatty sound, for burst suppression.
     @ObservationIgnored private var lastEventSound: Date?
+    /// Set from "will sleep" until a real wake; dark wakes (lid closed) never post a wake.
+    @ObservationIgnored private var asleepSince: Date?
     @ObservationIgnored private var pendingWarm: DispatchWorkItem?
     /// `kill`/`pkill` should still go through normal termination so macOS sounds are restored.
     @ObservationIgnored private var termSignal: DispatchSourceSignal?
@@ -58,6 +81,11 @@ final class AppModel {
             MainActor.assumeIsolated {
                 guard let self else { return }
                 self.installTerminationSignal()
+                self.installScreenSaverHotKey()
+                self.installPopupHotKey()
+                self.sessions.start(settings: { [weak self] in self?.limitGuardSettings ?? .default },
+                                    idleSettings: { [weak self] in self?.idleCompact ?? .default })
+                self.terminalPermissions.start()
                 self.config = self.reconcileTweaks(self.config)
                 self.hub?.reconcile(enabled: self.config.enabledTriggers, isListening: self.config.isListening)
                 self.applyAudioReadiness()
@@ -73,6 +101,7 @@ final class AppModel {
                 self.flushSave()
             }
         }
+        observeSleep()
         DispatchQueue.main.asyncAfter(deadline: .now() + Self.startupSoundDelay) { [weak self] in
             MainActor.assumeIsolated { self?.handle(.appStarted, context: nil) }
         }
@@ -80,10 +109,23 @@ final class AppModel {
 
     // MARK: - Events
 
+    private func observeSleep() {
+        let center = NSWorkspace.shared.notificationCenter
+        center.addObserver(forName: NSWorkspace.willSleepNotification, object: nil, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated { self?.asleepSince = Date() }
+        }
+        for name in [NSWorkspace.didWakeNotification, NSWorkspace.screensDidWakeNotification] {
+            center.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
+                MainActor.assumeIsolated { self?.asleepSince = nil }
+            }
+        }
+    }
+
     func handle(_ trigger: TriggerID, context: String?) {
+        if keyboardLock.isLocked, KeyboardLock.silences(trigger) { return }
         let now = Date()
         let decision = PlaybackGate.decide(trigger, config: config, now: now, lastPlayed: lastPlayed[trigger],
-                                           lastEventSound: lastEventSound)
+                                           lastEventSound: lastEventSound, asleepSince: asleepSince)
         let info = TriggerCatalog.info(for: trigger)
         switch decision {
         case let .skipped(reason):
@@ -126,8 +168,7 @@ final class AppModel {
             logger.error("No buffer for \(ref.string, privacy: .public)")
             return false
         }
-        engine.play(buffer, gain: gain)
-        return true
+        return engine.play(buffer, gain: gain)
     }
 
     private func record(_ trigger: TriggerID, _ date: Date, skip: SkipReason?, sound: String?, context: String?) {
@@ -330,6 +371,109 @@ final class AppModel {
         let pack = CustomPack(name: name ?? "My \(base.title) Pack", base: base)
         update { $0.addingCustomPack(pack).selectingPack(.custom(pack.id)) }
         return pack
+    }
+
+    func updateIdleCompact(_ transform: (IdleCompactSettings) -> IdleCompactSettings) {
+        let next = transform(idleCompact)
+        guard next != idleCompact else { return }
+        idleCompact = next
+        do {
+            try IdleCompactStore.save(next)
+        } catch {
+            logger.error("Saving idle compact settings failed: \(error.localizedDescription, privacy: .public)")
+            alertMessage = "Could not save the idle /compact setting: \(error.localizedDescription)"
+        }
+    }
+
+    func updateLimitGuard(_ transform: (LimitGuardSettings) -> LimitGuardSettings) {
+        let next = transform(limitGuardSettings)
+        guard next != limitGuardSettings else { return }
+        limitGuardSettings = next
+        do {
+            try LimitGuardStore.save(next)
+        } catch {
+            logger.error("Saving limit guard settings failed: \(error.localizedDescription, privacy: .public)")
+            alertMessage = "Could not save the usage limit setting: \(error.localizedDescription)"
+        }
+    }
+
+    func updateScreenSaver(_ transform: (ScreenSaverSettings) -> ScreenSaverSettings) {
+        let next = transform(screenSaver)
+        guard next != screenSaver else { return }
+        let shortcutChanged = next.shortcut != screenSaver.shortcut
+        screenSaver = next
+        if shortcutChanged { registerScreenSaverShortcut() }
+        do {
+            try ScreenSaverStore.save(next)
+        } catch {
+            logger.error("Saving screen saver settings failed: \(error.localizedDescription, privacy: .public)")
+            alertMessage = "Could not save the screen saver settings: \(error.localizedDescription)"
+        }
+    }
+
+    private func installScreenSaverHotKey() {
+        screenSaverHotKey = GlobalHotKey { [weak self] in self?.lockForOwner() }
+        registerScreenSaverShortcut()
+    }
+
+    private func registerScreenSaverShortcut() {
+        guard let hotKey = screenSaverHotKey else { return }
+        let isRegistered = hotKey.register(screenSaver.shortcut)
+        shortcutProblem = isRegistered ? nil : "\(screenSaver.shortcut?.displayString ?? "That shortcut") is already used by macOS or another app. Pick a different one."
+    }
+
+    /// While a recorder listens, every shortcut is released so pressing one records it instead of running it.
+    func setShortcutRecording(_ isRecording: Bool) {
+        if isRecording {
+            screenSaverHotKey?.unregister()
+            popupHotKey?.unregister()
+        } else {
+            registerScreenSaverShortcut()
+            registerPopupShortcut()
+        }
+    }
+
+    // MARK: - App settings
+
+    func updateAppSettings(_ transform: (AppSettings) -> AppSettings) {
+        let next = transform(appSettings)
+        guard next != appSettings else { return }
+        let shortcutChanged = next.popupShortcut != appSettings.popupShortcut
+        appSettings = next
+        if shortcutChanged { registerPopupShortcut() }
+        do {
+            try AppSettingsStore.save(next)
+        } catch {
+            logger.error("Saving app settings failed: \(error.localizedDescription, privacy: .public)")
+            alertMessage = "Could not save the settings: \(error.localizedDescription)"
+        }
+    }
+
+    private func installPopupHotKey() {
+        popupHotKey = GlobalHotKey { [weak self] in self?.togglePopup() }
+        registerPopupShortcut()
+    }
+
+    private func registerPopupShortcut() {
+        guard let hotKey = popupHotKey else { return }
+        let isRegistered = hotKey.register(appSettings.popupShortcut)
+        popupShortcutProblem = isRegistered ? nil : "\(appSettings.popupShortcut?.displayString ?? "That shortcut") is already used by macOS, another app or the screen saver. Pick a different one."
+    }
+
+    /// Opens the popup on the Control tab, or closes it when it is already open.
+    private func togglePopup() {
+        menuTab = .control
+        isShowingAppSettings = false
+        if !MenuBarPopup.toggle() {
+            logger.error("Could not find the menu-bar item to open the popup")
+        }
+    }
+
+    /// Starts the owner-lock screen saver with the current settings.
+    func lockForOwner() {
+        keyboardLock.lockForOwner(screenSaver: screenSaver, sessions: sessions) { [weak self] id, isPinned in
+            self?.updateScreenSaver { $0.pinning(id, isPinned) }
+        }
     }
 
     func updatePack(_ id: UUID, _ transform: (CustomPack) -> CustomPack) {

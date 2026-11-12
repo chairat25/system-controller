@@ -10,10 +10,12 @@ let package = Package(
     targets: [
         // Pure value-type logic: models, synth, resolution rules. Swift 6 strict concurrency, fully unit tested.
         .target(name: "SoundControlCore"),
+        // Catches NSExceptions that AVFAudio raises when the output device is gone.
+        .target(name: "ObjCExceptionCatcher"),
         // The menu-bar app: system monitors (IOKit/CoreAudio C callbacks), audio engine, SwiftUI views.
         .executableTarget(
             name: "SoundControl",
-            dependencies: ["SoundControlCore"],
+            dependencies: ["SoundControlCore", "ObjCExceptionCatcher"],
             swiftSettings: [.swiftLanguageMode(.v5)],
             linkerSettings: [
                 .linkedFramework("IOKit"),
@@ -22,6 +24,7 @@ let package = Package(
                 .linkedFramework("ServiceManagement")
             ]
         ),
-        .testTarget(name: "SoundControlCoreTests", dependencies: ["SoundControlCore"])
+        .testTarget(name: "SoundControlCoreTests", dependencies: ["SoundControlCore"]),
+        .testTarget(name: "ObjCExceptionCatcherTests", dependencies: ["ObjCExceptionCatcher"])
     ]
 )

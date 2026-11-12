@@ -1,16 +1,18 @@
 #!/usr/bin/env bash
-# Builds build/Sound Control.app (ad-hoc signed).
+# Builds build/System Controller.app (ad-hoc signed).
 # Usage: scripts/build-app.sh [--universal] [--dmg] [--install]
 #   --universal  build for Apple Silicon and Intel (slower)
-#   --dmg        also create build/SoundControl-<version>.dmg and .zip for distribution
+#   --dmg        also create build/SystemController-<version>.dmg and .zip for distribution
 #   --install    copy the app to /Applications
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-VERSION="${VERSION:-1.2.0}"
+VERSION="${VERSION:-1.3.0}"
 BUILD_NUMBER="$(date +%Y%m%d%H%M)"
-APP_NAME="Sound Control"
+APP_NAME="System Controller"
 APP="$ROOT/build/$APP_NAME.app"
+# Release file names: SystemController-<version>.dmg/.zip/.sha256
+ARTIFACT="SystemController"
 
 UNIVERSAL=false
 DMG=false
@@ -52,8 +54,8 @@ codesign --verify --deep --strict "$APP"
 if $DMG; then
     echo "→ Packaging DMG and ZIP"
     STAGE="$ROOT/build/dmg-stage"
-    DMG_PATH="$ROOT/build/SoundControl-$VERSION.dmg"
-    ZIP_PATH="$ROOT/build/SoundControl-$VERSION.zip"
+    DMG_PATH="$ROOT/build/$ARTIFACT-$VERSION.dmg"
+    ZIP_PATH="$ROOT/build/$ARTIFACT-$VERSION.zip"
     rm -rf "$STAGE" "$DMG_PATH" "$ZIP_PATH"
     mkdir -p "$STAGE"
     cp -R "$APP" "$STAGE/"
@@ -61,7 +63,7 @@ if $DMG; then
     hdiutil create -volname "$APP_NAME" -srcfolder "$STAGE" -ov -format UDZO "$DMG_PATH" >/dev/null
     rm -rf "$STAGE"
     (cd "$ROOT/build" && ditto -c -k --keepParent "$APP_NAME.app" "$ZIP_PATH")
-    (cd "$ROOT/build" && shasum -a 256 "$(basename "$DMG_PATH")" "$(basename "$ZIP_PATH")" > "SoundControl-$VERSION.sha256")
+    (cd "$ROOT/build" && shasum -a 256 "$(basename "$DMG_PATH")" "$(basename "$ZIP_PATH")" > "$ARTIFACT-$VERSION.sha256")
     echo "  $DMG_PATH"
     echo "  $ZIP_PATH"
 fi

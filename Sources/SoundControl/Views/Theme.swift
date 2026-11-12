@@ -5,6 +5,8 @@ enum Theme {
     static let accent = Color(red: 0.56, green: 0.43, blue: 1.0)
     static let accentSoft = accent.opacity(0.16)
     static let warning = Color.orange
+    /// Status dot of a Claude session that is working.
+    static let working = Color(red: 0.2, green: 0.85, blue: 0.4)
     static let cardRadius: CGFloat = 12
     static let tileSize: CGFloat = 32
 }

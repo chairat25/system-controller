@@ -101,6 +101,9 @@ struct SettingsPage: View {
                         Button("Recheck") { model.recheckInputPermission() }
                     }
                 }
+                LabeledContent("Accessibility (keyboard lock)") {
+                    Button("Open Settings") { PrivacySettings.openAccessibility() }
+                }
                 LabeledContent("Bluetooth") {
                     Button("Open Settings") { PrivacySettings.openBluetooth() }
                 }
@@ -110,7 +113,7 @@ struct SettingsPage: View {
             } header: {
                 Text("Permissions")
             } footer: {
-                Text("Keyboard & mouse triggers need Input Monitoring. Only key codes are checked — nothing you type is read or stored. After rebuilding the app you may need to grant it again.")
+                Text("Keyboard & mouse triggers need Input Monitoring. Only key codes are checked — nothing you type is read or stored. Lock keyboard needs Accessibility, because it stops keys instead of just listening. After rebuilding the app you may need to grant it again.")
             }
 
             Section("Data") {
