@@ -10,26 +10,30 @@ struct TriggersPage: View {
     @State private var search = ""
     @State private var filter = Filter.all
     @State private var editing: TriggerID?
+    @State private var collapsed: Set<TriggerCategory> = []
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 18) {
-                PageHeader(title: "Triggers",
-                           subtitle: "Every moment on your Mac can make a sound. Pick one, or let your pack decide.") {
-                    actions
-                }
-                toolbar
-                ForEach(TriggerCategory.allCases, id: \.self) { category in
-                    let rows = visibleTriggers(in: category)
-                    if !rows.isEmpty {
-                        section(category, rows: rows)
-                    }
-                }
-                if TriggerCategory.allCases.allSatisfy({ visibleTriggers(in: $0).isEmpty }) {
-                    ContentUnavailableView.search(text: search)
+        WindowPage {
+            PageHeader(title: "Triggers",
+                       subtitle: "Every moment on your Mac can make a sound. Pick one, or let your pack decide.") {
+                actions
+            }
+            toolbar
+            ForEach(TriggerCategory.allCases, id: \.self) { category in
+                let rows = visibleTriggers(in: category)
+                if !rows.isEmpty {
+                    section(category, rows: rows)
                 }
             }
-            .padding(24)
+            if TriggerCategory.allCases.allSatisfy({ visibleTriggers(in: $0).isEmpty }) {
+                EmptyState("No matching triggers", message: "Try another word or switch the filter back to All.",
+                           systemImage: "magnifyingglass") {
+                    Button("Show all triggers") {
+                        search = ""
+                        filter = .all
+                    }
+                }
+            }
         }
         .sheet(item: $editing) { trigger in
             TriggerDetailSheet(trigger: trigger)
@@ -51,56 +55,54 @@ struct TriggersPage: View {
             }
             .menuIndicator(.hidden)
             .fixedSize()
+            .help("More actions")
+            .accessibilityLabel("More actions")
         }
     }
 
     private var toolbar: some View {
-        HStack(spacing: 12) {
-            HStack {
-                Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
-                TextField("Search triggers", text: $search).textFieldStyle(.plain)
-                if !search.isEmpty {
-                    Button { search = "" } label: { Image(systemName: "xmark.circle.fill") }
-                        .buttonStyle(.plain).foregroundStyle(.secondary)
-                }
-            }
-            .padding(7)
-            .background(.background.secondary, in: RoundedRectangle(cornerRadius: 8))
-            .frame(maxWidth: 320)
-            Picker("Filter", selection: $filter) {
-                ForEach(Filter.allCases, id: \.self) { Text($0.rawValue) }
-            }
-            .pickerStyle(.segmented)
-            .labelsHidden()
-            .frame(width: 170)
-            Spacer()
-            Text("\(model.config.enabledTriggers.count) of \(TriggerID.allCases.count) on")
-                .font(.callout.monospacedDigit())
-                .foregroundStyle(.secondary)
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: Spacing.control) { toolbarItems }
+            VStack(alignment: .leading, spacing: Spacing.related) { toolbarItems }
         }
+    }
+
+    @ViewBuilder
+    private var toolbarItems: some View {
+        SearchField(prompt: "Search triggers", text: $search)
+        FilterSegment(title: "Show", selection: $filter)
+        Spacer(minLength: 0)
+        Text("\(model.config.enabledTriggers.count) of \(TriggerID.allCases.count) on")
+            .font(.callout.monospacedDigit())
+            .foregroundStyle(.secondary)
     }
 
     private func section(_ category: TriggerCategory, rows: [TriggerInfo]) -> some View {
         let all = TriggerCatalog.triggers(in: category)
         let onCount = all.filter { model.config.isEnabled($0.id) }.count
-        return VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Text(category.title.uppercased()).font(.caption.weight(.bold)).foregroundStyle(.secondary)
-                Text("· \(onCount) of \(all.count) on").font(.caption).foregroundStyle(.tertiary)
-                Spacer()
+        let isCollapsed = collapsed.contains(category) && search.isEmpty
+        return VStack(alignment: .leading, spacing: Spacing.related) {
+            ListSectionHeader(category.title, count: "\(onCount) of \(all.count) on") {
                 Button(onCount == all.count ? "Turn all off" : "Turn all on") {
                     model.update { $0.withAllTriggers(enabled: onCount != all.count, in: category) }
                 }
                 .buttonStyle(.link)
                 .font(.caption)
+                RowIconButton(systemImage: isCollapsed ? "chevron.right" : "chevron.down",
+                              help: isCollapsed ? "Show \(category.title)" : "Hide \(category.title)") {
+                    withAnimation(.easeInOut(duration: 0.15)) { toggle(category) }
+                }
             }
-            Card {
-                ForEach(Array(rows.enumerated()), id: \.element.id) { index, info in
-                    if index > 0 { Divider().padding(.leading, 60) }
+            if !isCollapsed {
+                GroupedList(items: rows) { info in
                     TriggerRow(info: info) { editing = info.id }
                 }
             }
         }
+    }
+
+    private func toggle(_ category: TriggerCategory) {
+        if collapsed.contains(category) { collapsed.remove(category) } else { collapsed.insert(category) }
     }
 
     private func visibleTriggers(in category: TriggerCategory) -> [TriggerInfo] {
@@ -126,11 +128,11 @@ struct TriggerRow: View {
 
     var body: some View {
         let isOn = model.config.isEnabled(info.id)
-        HStack(spacing: 12) {
+        HStack(spacing: Spacing.control) {
             SymbolTile(symbol: info.symbol, isActive: isOn)
-            VStack(alignment: .leading, spacing: 3) {
+            VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 6) {
-                    Text(info.title).font(.body.weight(.medium))
+                    Text(info.title).font(.body.weight(.medium)).foregroundStyle(isOn ? .primary : .secondary)
                     if info.isRecommended { Badge(text: "Recommended", color: Theme.accent) }
                     if info.permission == .inputMonitoring { Badge(text: "Input Monitoring", symbol: "hand.raised.fill") }
                     if info.permission == .bluetooth { Badge(text: "Bluetooth", symbol: "hand.raised.fill") }
@@ -165,16 +167,11 @@ struct TriggerRow: View {
                         .foregroundStyle(Theme.warning)
                 }
             }
-            Spacer(minLength: 8)
-            TriggerSoundMenu(trigger: info.id)
+            Spacer(minLength: Spacing.related)
             PlayButton { model.preview(info.id) }
-            Button(action: onEdit) {
-                Image(systemName: "slider.horizontal.3")
-            }
-            .buttonStyle(.plain)
-            .foregroundStyle(.secondary)
-            .help("Sounds, volume and rotation")
-            Toggle("", isOn: Binding(get: { isOn }, set: { model.setTrigger(info.id, enabled: $0) }))
+            TriggerSoundMenu(trigger: info.id)
+            RowIconButton(systemImage: "slider.horizontal.3", help: "Sounds, volume and rotation", action: onEdit)
+            Toggle(info.title, isOn: Binding(get: { isOn }, set: { model.setTrigger(info.id, enabled: $0) }))
                 .toggleStyle(.switch)
                 .labelsHidden()
                 .tint(Theme.accent)

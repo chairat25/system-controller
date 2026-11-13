@@ -280,3 +280,159 @@ struct SessionsCornerTests {
         #expect(ScreenSaverCorner.bottomLeft.isLeft && !ScreenSaverCorner.bottomLeft.isTop)
     }
 }
+
+@Suite("Screen saver background")
+struct ScreenSaverBackgroundTests {
+    @Test("defaults to pitch black, presets exclude custom photo, and every case has a title")
+    func defaultsAndPresets() {
+        #expect(ScreenSaverSettings.default.background == .pitchBlack)
+        #expect(ScreenSaverSettings.default.customBackgroundName == nil)
+        #expect(!ScreenSaverBackground.presets.contains(.customImage))
+        #expect(ScreenSaverBackground.presets.contains(.desktopWallpaper))
+        for background in ScreenSaverBackground.allCases {
+            #expect(!background.title.isEmpty)
+        }
+    }
+
+    @Test("changes background and custom photo cleanly without touching other settings")
+    func updates() {
+        let base = ScreenSaverSettings.default.withClockBright(true).withMascot(.penguin)
+        let aurora = base.withBackground(.aurora)
+        #expect(aurora.background == .aurora)
+        #expect(aurora.isClockBright && aurora.mascot == .penguin)
+
+        let custom = aurora.withCustomBackground(name: "  My Wallpaper  ")
+        #expect(custom.background == .customImage)
+        #expect(custom.customBackgroundName == "My Wallpaper")
+
+        let switched = custom.withBackground(.ocean)
+        #expect(switched.background == .ocean)
+        #expect(switched.customBackgroundName == "My Wallpaper")
+
+        let backToCustom = switched.withBackground(.customImage)
+        let clearedFromCustom = backToCustom.withCustomBackground(name: nil)
+        #expect(clearedFromCustom.background == .pitchBlack)
+        #expect(clearedFromCustom.customBackgroundName == nil)
+
+        let clearedFromPreset = switched.withCustomBackground(name: "   ")
+        #expect(clearedFromPreset.background == .ocean)
+        #expect(clearedFromPreset.customBackgroundName == nil)
+    }
+
+    @Test("round-trips through JSON and falls back to pitch black on legacy or unknown values")
+    func persists() throws {
+        let custom = ScreenSaverSettings.default
+            .withCustomBackground(name: "Night Sky")
+            .withBackground(.cosmos)
+        let data = try JSONEncoder().encode(custom)
+        let decoded = try JSONDecoder().decode(ScreenSaverSettings.self, from: data)
+        #expect(decoded.background == .cosmos)
+        #expect(decoded.customBackgroundName == "Night Sky")
+
+        let legacy = try JSONDecoder().decode(ScreenSaverSettings.self, from: Data(#"{"fadeSeconds":15}"#.utf8))
+        #expect(legacy.background == .pitchBlack)
+        #expect(legacy.customBackgroundName == nil)
+
+        let unknown = try JSONDecoder().decode(
+            ScreenSaverSettings.self,
+            from: Data(#"{"background":"hologram","customBackgroundName":"  "}"#.utf8)
+        )
+        #expect(unknown.background == .pitchBlack)
+        #expect(unknown.customBackgroundName == nil)
+    }
+}
+
+@Suite("Draggable widgets and stacking order")
+struct WidgetDragLayoutTests {
+    @Test("starts with default layout and promotes the most recently moved widget to the top layer repeatedly")
+    func promotesToTopRepeatedly() {
+        let base = ScreenSaverSettings.default
+        #expect(!base.hasCustomWidgetLayout)
+        #expect(base.widgetOrder == ScreenSaverItem.allCases)
+
+        let first = base.moving(.clock, to: WidgetPosition(x: 0.2, y: 0.3))
+        #expect(first.hasCustomWidgetLayout)
+        #expect(first.widgetOrder.last == .clock)
+        #expect(first.position(for: .clock) == WidgetPosition(x: 0.2, y: 0.3))
+
+        let second = first.moving(.calendar, to: WidgetPosition(x: 0.25, y: 0.35))
+        #expect(second.widgetOrder.last == .calendar)
+        #expect(second.zIndex(of: .calendar) > second.zIndex(of: .clock))
+
+        let third = second.moving(.sessions, to: WidgetPosition(x: 0.22, y: 0.32))
+        #expect(third.widgetOrder.last == .sessions)
+        #expect(third.zIndex(of: .sessions) > third.zIndex(of: .calendar))
+
+        let reStacked = third.moving(.clock, to: WidgetPosition(x: 0.24, y: 0.34))
+        #expect(reStacked.widgetOrder.last == .clock)
+        #expect(reStacked.zIndex(of: .clock) > reStacked.zIndex(of: .sessions))
+        #expect(reStacked.zIndex(of: .sessions) > reStacked.zIndex(of: .calendar))
+    }
+
+    @Test("clamps normalized coordinates, resets cleanly, and clears sessions override when corner preset is picked")
+    func clampsAndResets() {
+        let moved = ScreenSaverSettings.default
+            .withClockBright(true)
+            .moving(.calendar, to: WidgetPosition(x: -0.5, y: 1.8))
+            .moving(.sessions, to: WidgetPosition(x: 0.4, y: 0.5))
+
+        #expect(moved.position(for: .calendar) == WidgetPosition(x: 0, y: 1))
+
+        let cornerPicked = moved.withSessionsCorner(.bottomLeft)
+        #expect(cornerPicked.sessionsCorner == .bottomLeft)
+        #expect(cornerPicked.position(for: .sessions) == nil)
+        #expect(cornerPicked.position(for: .calendar) == WidgetPosition(x: 0, y: 1))
+
+        let reset = cornerPicked.resetWidgetLayout()
+        #expect(!reset.hasCustomWidgetLayout)
+        #expect(reset.widgetPositions.isEmpty)
+        #expect(reset.widgetOrder == ScreenSaverItem.allCases)
+        #expect(reset.isClockBright)
+    }
+
+    @Test("persists custom positions and order, while legacy JSON falls back to defaults")
+    func persistence() throws {
+        let custom = ScreenSaverSettings.default
+            .moving(.claudeUsage, to: WidgetPosition(x: 0.75, y: 0.25))
+            .bringingToFront(.clock)
+
+        let decoded = try JSONDecoder().decode(ScreenSaverSettings.self, from: JSONEncoder().encode(custom))
+        #expect(decoded.widgetPositions == custom.widgetPositions)
+        #expect(decoded.widgetOrder == custom.widgetOrder)
+
+        let legacy = try JSONDecoder().decode(ScreenSaverSettings.self, from: Data(#"{"fadeSeconds":12}"#.utf8))
+        #expect(!legacy.hasCustomWidgetLayout)
+        #expect(legacy.widgetOrder == ScreenSaverItem.allCases)
+    }
+
+    @Test("canvas geometry keeps widgets in bounds, round-trips across display sizes, and detects overlap layers")
+    func geometryAndOverlaps() {
+        let canvas = CanvasSize(width: 1440, height: 900)
+        let cardSize = CanvasSize(width: 280, height: 220)
+
+        let clamped = WidgetCanvasLayout.clampedCenter(CanvasPoint(x: 10, y: 950), itemSize: cardSize, canvasSize: canvas)
+        let bounds = WidgetCanvasLayout.centerBounds(itemSize: cardSize, canvasSize: canvas)
+        #expect(abs(clamped.x - bounds.minX) < 0.001)
+        #expect(abs(clamped.y - bounds.maxY) < 0.001)
+
+        let target = CanvasPoint(x: 620, y: 410)
+        let normalized = WidgetCanvasLayout.normalizedPosition(fromCenter: target, itemSize: cardSize, canvasSize: canvas)
+        let restored = WidgetCanvasLayout.pixelCenter(from: normalized, itemSize: cardSize, canvasSize: canvas)
+        #expect(abs(restored.x - target.x) < 0.01)
+        #expect(abs(restored.y - target.y) < 0.01)
+
+        let order: [ScreenSaverItem] = [.calendar, .claudeUsage, .clock]
+        let rects: [ScreenSaverItem: CanvasRect] = [
+            .calendar: CanvasRect(center: CanvasPoint(x: 500, y: 400), size: CanvasSize(width: 280, height: 270)),
+            .claudeUsage: CanvasRect(center: CanvasPoint(x: 560, y: 420), size: CanvasSize(width: 270, height: 200)),
+            .clock: CanvasRect(center: CanvasPoint(x: 600, y: 440), size: CanvasSize(width: 320, height: 170)),
+        ]
+        let states = WidgetCanvasLayout.overlapStates(order: order, rects: rects)
+        #expect(states[.calendar]?.overlapsLower == false)
+        #expect(states[.calendar]?.isCoveredByUpper == true)
+        #expect(states[.claudeUsage]?.overlapsLower == true)
+        #expect(states[.claudeUsage]?.isCoveredByUpper == true)
+        #expect(states[.clock]?.overlapsLower == true)
+        #expect(states[.clock]?.isCoveredByUpper == false)
+    }
+}

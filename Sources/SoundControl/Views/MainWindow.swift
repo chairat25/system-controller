@@ -44,7 +44,7 @@ struct MainWindow: View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 8) {
                 Image(systemName: "waveform.circle.fill").font(.title).foregroundStyle(Theme.accent)
-                Text("Sound Control").font(.title3.weight(.bold))
+                Text("Sound Control").font(.title3.weight(.semibold))
             }
             .padding(.horizontal, 14)
             .padding(.bottom, 10)
@@ -62,19 +62,21 @@ struct MainWindow: View {
     private var listeningCard: some View {
         HStack {
             VStack(alignment: .leading, spacing: 2) {
-                Text(model.config.isListening ? "Listening" : "Paused").font(.callout.weight(.semibold))
-                Text(SoundResolver.packName(model.config.activePack, in: model.config))
-                    .font(.caption).foregroundStyle(.secondary)
+                StatusIndicator(text: model.config.isListening ? "Listening" : "Paused",
+                                level: model.config.isListening ? .good : .off)
+                Label(SoundResolver.packName(model.config.activePack, in: model.config), systemImage: "square.stack.3d.up")
+                    .font(.caption).foregroundStyle(.secondary).lineLimit(1)
             }
             Spacer()
-            Toggle("", isOn: Binding(get: { model.config.isListening },
+            Toggle("Listening", isOn: Binding(get: { model.config.isListening },
                                      set: { value in model.update { $0.withListening(value) } }))
                 .toggleStyle(.switch)
                 .labelsHidden()
                 .tint(Theme.accent)
         }
-        .padding(12)
-        .background(.background.secondary, in: RoundedRectangle(cornerRadius: 10))
+        .padding(Spacing.control)
+        .background(Theme.groupFill, in: RoundedRectangle(cornerRadius: Theme.groupRadius, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: Theme.groupRadius, style: .continuous).strokeBorder(Theme.hairline))
         .padding(10)
     }
 

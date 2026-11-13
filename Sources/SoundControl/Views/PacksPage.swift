@@ -11,55 +11,48 @@ struct PacksPage: View {
     private let columns = [GridItem(.adaptive(minimum: 220), spacing: 14)]
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 22) {
-                PageHeader(title: "Sound Packs",
-                           subtitle: "A pack voices every trigger that follows it. Build your own to run the show.") {
-                    HStack {
-                        Button { importPack() } label: { Label("Import…", systemImage: "square.and.arrow.down") }
-                        Menu {
-                            ForEach(BuiltInPack.allCases, id: \.self) { base in
-                                Button("Start from \(base.title)") { editingPack = model.createPack(from: base).id }
-                            }
-                        } label: {
-                            Label("New pack", systemImage: "plus")
+        WindowPage {
+            PageHeader(title: "Sound Packs",
+                       subtitle: "A pack voices every trigger that follows it. Triggers set to their own sounds keep them.") {
+                HStack {
+                    Button { importPack() } label: { Label("Import…", systemImage: "square.and.arrow.down") }
+                    Menu {
+                        ForEach(BuiltInPack.allCases, id: \.self) { base in
+                            Button("Start from \(base.title)") { editingPack = model.createPack(from: base).id }
                         }
-                        .fixedSize()
+                    } label: {
+                        Label("New pack", systemImage: "plus")
                     }
+                    .fixedSize()
                 }
+            }
 
-                Text("BUILT IN").font(.caption.weight(.bold)).foregroundStyle(.secondary)
+            VStack(alignment: .leading, spacing: Spacing.related) {
+                ListSectionHeader("Built-in", count: "\(BuiltInPack.allCases.count)")
                 LazyVGrid(columns: columns, spacing: 14) {
                     ForEach(BuiltInPack.allCases, id: \.self) { pack in
                         BuiltInPackCard(pack: pack)
                     }
                 }
+            }
 
-                HStack {
-                    Text("YOUR PACKS").font(.caption.weight(.bold)).foregroundStyle(.secondary)
-                    Text("· you are the game master").font(.caption).foregroundStyle(.tertiary)
-                }
+            VStack(alignment: .leading, spacing: Spacing.related) {
+                ListSectionHeader("Your Packs", count: model.config.customPacks.isEmpty ? nil : "\(model.config.customPacks.count)")
                 if model.config.customPacks.isEmpty {
-                    Card {
-                        VStack(spacing: 8) {
-                            Image(systemName: "theatermasks.fill").font(.largeTitle).foregroundStyle(Theme.accent)
-                            Text("No custom packs yet").font(.headline)
-                            Text("Start from any built-in pack, then swap in your own sounds trigger by trigger.")
-                                .foregroundStyle(.secondary).multilineTextAlignment(.center)
+                    EmptyState("No custom packs yet",
+                               message: "Start from any built-in pack, then swap in your own sounds trigger by trigger.",
+                               systemImage: "theatermasks.fill") {
+                        Menu("New pack") {
+                            ForEach(BuiltInPack.allCases, id: \.self) { base in
+                                Button("Start from \(base.title)") { editingPack = model.createPack(from: base).id }
+                            }
                         }
-                        .frame(maxWidth: .infinity)
-                        .padding(28)
+                        .fixedSize()
                     }
                 } else {
-                    Card {
-                        ForEach(Array(model.config.customPacks.enumerated()), id: \.element.id) { index, pack in
-                            if index > 0 { Divider().padding(.leading, 60) }
-                            customRow(pack)
-                        }
-                    }
+                    GroupedList(items: model.config.customPacks) { pack in customRow(pack) }
                 }
             }
-            .padding(24)
         }
         .sheet(item: Binding(get: { editingPack.map(IdentifiedUUID.init) }, set: { editingPack = $0?.id })) { item in
             PackEditorSheet(packID: item.id)
@@ -78,19 +71,19 @@ struct PacksPage: View {
 
     private func customRow(_ pack: CustomPack) -> some View {
         let isActive = model.config.activePack == .custom(pack.id)
-        return HStack(spacing: 12) {
+        return HStack(spacing: Spacing.control) {
             SymbolTile(symbol: "theatermasks.fill", isActive: isActive)
             VStack(alignment: .leading, spacing: 2) {
                 HStack {
                     Text(pack.name).font(.body.weight(.medium))
-                    if isActive { Badge(text: "Active", color: Theme.accent) }
+                    if isActive { Badge(text: "Active", color: Theme.accent, symbol: "checkmark") }
                 }
                 Text("Based on \(pack.base.title) · \(pack.overrides.count) custom trigger\(pack.overrides.count == 1 ? "" : "s")")
                     .font(.caption).foregroundStyle(.secondary)
             }
             Spacer()
             if !isActive {
-                Button("Use") { model.update { $0.selectingPack(.custom(pack.id)) } }
+                Button("Use pack") { withAnimation(.easeOut(duration: 0.15)) { model.update { $0.selectingPack(.custom(pack.id)) } } }
             }
             Button("Edit") { editingPack = pack.id }
             Menu {
@@ -102,6 +95,8 @@ struct PacksPage: View {
             }
             .menuIndicator(.hidden)
             .fixedSize()
+            .help("More actions")
+            .accessibilityLabel("More actions for \(pack.name)")
         }
         .rowPadding()
     }
@@ -148,6 +143,7 @@ private struct BuiltInPackCard: View {
             Text(pack.tagline).font(.caption).foregroundStyle(.secondary).lineLimit(2, reservesSpace: true)
             HStack {
                 Button {
+                    // Previewing never switches the active pack.
                     let motif = Self.previewMotifs[previewStep % Self.previewMotifs.count]
                     previewStep += 1
                     if let ref = pack.sounds(for: motif).first { model.preview(ref) }
@@ -156,7 +152,7 @@ private struct BuiltInPackCard: View {
                 }
                 Spacer()
                 Button(isActive ? "In use" : "Use pack") {
-                    model.update { $0.selectingPack(.builtIn(pack)) }
+                    withAnimation(.easeOut(duration: 0.15)) { model.update { $0.selectingPack(.builtIn(pack)) } }
                 }
                 .disabled(isActive)
                 .buttonStyle(.borderedProminent)
@@ -166,6 +162,8 @@ private struct BuiltInPackCard: View {
         .padding(14)
         .background(.background.secondary, in: RoundedRectangle(cornerRadius: Theme.cardRadius, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: Theme.cardRadius, style: .continuous)
-            .strokeBorder(isActive ? Theme.accent : Color.primary.opacity(0.06), lineWidth: isActive ? 2 : 1))
+            .strokeBorder(isActive ? Theme.accent.opacity(0.55) : Theme.hairline, lineWidth: isActive ? 1.5 : 1))
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("\(pack.title)\(isActive ? ", active" : "")")
     }
 }

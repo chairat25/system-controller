@@ -1,8 +1,63 @@
 import SwiftUI
 import SoundControlCore
 
+/// Shared translucent dark glass surface for widgets: keeps the topmost widget sharp while allowing
+/// any overlapped widget underneath to remain faintly visible (~30% bleed-through).
+struct WidgetGlassBackdrop: ViewModifier {
+    let showCard: Bool
+    let isDragging: Bool
+    let isOverlappingLower: Bool
+    var cornerRadius: CGFloat = 18
+
+    func body(content: Content) -> some View {
+        let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+        content
+            .background {
+                if showCard {
+                    ZStack {
+                        shape.fill(Color.black.opacity(0.68))
+                        shape.fill(Color.white.opacity(isDragging ? 0.11 : (isOverlappingLower ? 0.08 : 0.06)))
+                    }
+                    .overlay(
+                        shape.strokeBorder(
+                            Color.white.opacity(isDragging ? 0.38 : (isOverlappingLower ? 0.22 : 0.09)),
+                            lineWidth: 1
+                        )
+                    )
+                    .shadow(
+                        color: .black.opacity(isDragging ? 0.65 : (isOverlappingLower ? 0.48 : 0.18)),
+                        radius: isDragging ? 20 : (isOverlappingLower ? 14 : 8),
+                        y: isDragging ? 10 : 4
+                    )
+                }
+            }
+            .animation(.easeOut(duration: 0.18), value: showCard)
+            .animation(.easeOut(duration: 0.18), value: isDragging)
+            .animation(.easeOut(duration: 0.18), value: isOverlappingLower)
+    }
+}
+
+extension View {
+    func widgetGlassBackdrop(
+        showCard: Bool = true,
+        isDragging: Bool = false,
+        isOverlappingLower: Bool = false,
+        cornerRadius: CGFloat = 18
+    ) -> some View {
+        modifier(WidgetGlassBackdrop(
+            showCard: showCard,
+            isDragging: isDragging,
+            isOverlappingLower: isOverlappingLower,
+            cornerRadius: cornerRadius
+        ))
+    }
+}
+
 /// Time and date, large.
 struct ClockWidget: View {
+    var isDragging: Bool = false
+    var isOverlappingLower: Bool = false
+
     var body: some View {
         TimelineView(.periodic(from: .now, by: 1)) { context in
             VStack(spacing: 4) {
@@ -12,18 +67,31 @@ struct ClockWidget: View {
                     .font(.title2)
                     .foregroundStyle(.secondary)
             }
+            .padding(.horizontal, 24)
+            .padding(.vertical, 14)
+            .widgetGlassBackdrop(
+                showCard: isDragging || isOverlappingLower,
+                isDragging: isDragging,
+                isOverlappingLower: isOverlappingLower,
+                cornerRadius: 22
+            )
         }
     }
 }
 
 /// The current month with today highlighted.
 struct CalendarWidget: View {
+    var isDragging: Bool = false
+    var isOverlappingLower: Bool = false
     private static let columns = Array(repeating: GridItem(.fixed(34), spacing: 4), count: 7)
     private static let calendar = Calendar.current
 
     var body: some View {
         TimelineView(.periodic(from: .now, by: 60)) { context in
-            WidgetCard(title: context.date.formatted(.dateTime.month(.wide).year()), symbol: "calendar") {
+            WidgetCard(title: context.date.formatted(.dateTime.month(.wide).year()),
+                       symbol: "calendar",
+                       isDragging: isDragging,
+                       isOverlappingLower: isOverlappingLower) {
                 LazyVGrid(columns: Self.columns, spacing: 4) {
                     ForEach(Array(Self.weekdayInitials.enumerated()), id: \.offset) { _, initial in
                         Text(initial).font(.caption.weight(.semibold)).foregroundStyle(.secondary)
@@ -66,12 +134,14 @@ struct CalendarWidget: View {
 
 /// Claude Code token usage for the current five-hour window and for today, read from local transcripts.
 struct ClaudeUsageWidget: View {
+    var isDragging: Bool = false
+    var isOverlappingLower: Bool = false
     private static let refreshInterval: Duration = .seconds(30)
     @State private var summary = ClaudeUsageSummary.empty
     @State private var hasLoaded = false
 
     var body: some View {
-        WidgetCard(title: "Claude usage", symbol: "sparkle") {
+        WidgetCard(title: "Claude usage", symbol: "sparkle", isDragging: isDragging, isOverlappingLower: isOverlappingLower) {
             VStack(alignment: .leading, spacing: 14) {
                 usageRow(title: "This 5-hour window", tokens: summary.windowTokens, replies: summary.windowReplies,
                          note: windowNote)
@@ -109,6 +179,8 @@ struct ClaudeUsageWidget: View {
 private struct WidgetCard<Content: View>: View {
     let title: String
     let symbol: String
+    var isDragging: Bool = false
+    var isOverlappingLower: Bool = false
     @ViewBuilder let content: Content
 
     var body: some View {
@@ -117,6 +189,6 @@ private struct WidgetCard<Content: View>: View {
             content
         }
         .padding(20)
-        .background(Color.white.opacity(0.07), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .widgetGlassBackdrop(showCard: true, isDragging: isDragging, isOverlappingLower: isOverlappingLower)
     }
 }

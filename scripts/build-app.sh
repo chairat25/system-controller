@@ -7,7 +7,7 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-VERSION="${VERSION:-1.3.1}"
+VERSION="${VERSION:-1.4.0}"
 BUILD_NUMBER="$(date +%Y%m%d%H%M)"
 APP_NAME="System Controller"
 APP="$ROOT/build/$APP_NAME.app"

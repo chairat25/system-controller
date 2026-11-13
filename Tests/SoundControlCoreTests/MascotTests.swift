@@ -62,6 +62,37 @@ struct MascotRouteTests {
         #expect(still.pose(at: 50).0.x == 0)
         #expect(!still.pose(at: 50).0.isWalking)
     }
+
+    @Test("2D route roams across the whole area and stays inside bounds")
+    func roams2D() {
+        let area = MascotRoute(seed: 99, width: 1200, height: 700)
+        var cursor = MascotRoute.Cursor.origin
+        var minY = Double.infinity
+        var maxY = -Double.infinity
+        for second in stride(from: 0.0, through: 4 * 3600, by: 7.3) {
+            let (pose, next) = area.pose(at: second, from: cursor)
+            cursor = next
+            #expect((0...1200).contains(pose.x))
+            #expect((0...700).contains(pose.y))
+            minY = min(minY, pose.y)
+            maxY = max(maxY, pose.y)
+        }
+        #expect(maxY - minY > 300)
+    }
+
+    @Test("custom drop origin starts resting at that clamped point before roaming")
+    func startsAtDroppedSpot() {
+        let dropped = MascotRoute(seed: 7, width: 1000, height: 600, startX: 250, startY: 120)
+        let (initial, _) = dropped.pose(at: 0)
+        #expect(initial.x == 250)
+        #expect(initial.y == 120)
+        #expect(!initial.isWalking)
+
+        let clamped = MascotRoute(seed: 7, width: 1000, height: 600, startX: -50, startY: 9999)
+        let (bounded, _) = clamped.pose(at: 0)
+        #expect(bounded.x == 0)
+        #expect(bounded.y == 600)
+    }
 }
 
 @Suite("Mascot choice")
@@ -82,6 +113,35 @@ struct MascotChoiceTests {
         #expect(decoded.isClockBright)
         let odd = try JSONDecoder().decode(ScreenSaverSettings.self, from: Data(#"{"mascot":"dragon"}"#.utf8))
         #expect(odd.mascot == .cat)
+    }
+
+    @Test("hiding the mascot hides activeMascot while preserving the chosen animal")
+    func hideMascot() throws {
+        let base = ScreenSaverSettings.default.withMascot(.penguin)
+        #expect(!base.isMascotHidden)
+        #expect(base.activeMascot == .penguin)
+
+        let hidden = base.withMascotHidden(true)
+        #expect(hidden.isMascotHidden)
+        #expect(hidden.activeMascot == .none)
+        #expect(hidden.mascot == .penguin)
+
+        let decoded = try JSONDecoder().decode(ScreenSaverSettings.self, from: JSONEncoder().encode(hidden))
+        #expect(decoded.isMascotHidden)
+        #expect(decoded.activeMascot == .none)
+        #expect(decoded.mascot == .penguin)
+
+        let shownAgain = decoded.withMascotHidden(false)
+        #expect(!shownAgain.isMascotHidden)
+        #expect(shownAgain.activeMascot == .penguin)
+
+        let pickedAnimal = hidden.withMascot(.bunny)
+        #expect(!pickedAnimal.isMascotHidden)
+        #expect(pickedAnimal.activeMascot == .bunny)
+
+        let noneUnhidden = ScreenSaverSettings.default.withMascot(.none).withMascotHidden(false)
+        #expect(!noneUnhidden.isMascotHidden)
+        #expect(noneUnhidden.activeMascot == .cat)
     }
 }
 

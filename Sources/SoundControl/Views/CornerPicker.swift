@@ -6,26 +6,29 @@ struct CornerPicker: View {
     let selection: ScreenSaverCorner
     let onSelect: (ScreenSaverCorner) -> Void
 
+    private static let cellSize = CGSize(width: 38, height: 24)
     private static let rows: [[ScreenSaverCorner]] = [[.topLeft, .topRight], [.bottomLeft, .bottomRight]]
 
     var body: some View {
-        VStack(spacing: 4) {
+        VStack(spacing: 3) {
             ForEach(Self.rows, id: \.first) { row in
-                HStack(spacing: 4) {
+                HStack(spacing: 3) {
                     ForEach(row) { corner in cell(corner) }
                 }
             }
         }
-        .padding(5)
-        .background(Color.secondary.opacity(0.12), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .padding(4)
+        .background(Color.secondary.opacity(0.1), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
     }
 
     private func cell(_ corner: ScreenSaverCorner) -> some View {
         let isSelected = corner == selection
         return Button { onSelect(corner) } label: {
             RoundedRectangle(cornerRadius: 5, style: .continuous)
-                .fill(isSelected ? Theme.accent : Color.secondary.opacity(0.22))
-                .frame(width: 54, height: 32)
+                .fill(isSelected ? Theme.accent : Color.secondary.opacity(0.18))
+                .overlay(RoundedRectangle(cornerRadius: 5, style: .continuous)
+                    .strokeBorder(isSelected ? Color.white.opacity(0.6) : .clear, lineWidth: 1))
+                .frame(width: Self.cellSize.width, height: Self.cellSize.height)
                 .overlay(alignment: corner.alignment) {
                     // A tiny list marker sitting in the chosen corner of the cell.
                     Image(systemName: "list.bullet").font(.system(size: 8, weight: .bold))

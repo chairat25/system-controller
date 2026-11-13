@@ -43,16 +43,20 @@ final class ClaudeSessionMonitor {
     @ObservationIgnored private var idleCompactor = IdleCompactor.initial
     @ObservationIgnored private var settings: () -> LimitGuardSettings = { .default }
     @ObservationIgnored private var idleSettings: () -> IdleCompactSettings = { .default }
+    @ObservationIgnored private var isLocked: () -> Bool = { false }
     @ObservationIgnored private var quotaFetchedAt: Date?
     @ObservationIgnored private var nextQuotaFetch = Date.distantPast
     @ObservationIgnored private var isFetchingQuota = false
     @ObservationIgnored private var timer: Timer?
     @ObservationIgnored private let logger = Logger(subsystem: "com.pond.soundcontrol", category: "ClaudeSessionMonitor")
 
-    func start(settings: @escaping () -> LimitGuardSettings, idleSettings: @escaping () -> IdleCompactSettings) {
+    func start(settings: @escaping () -> LimitGuardSettings,
+               idleSettings: @escaping () -> IdleCompactSettings,
+               isLocked: @escaping () -> Bool = { false }) {
         guard timer == nil else { return }
         self.settings = settings
         self.idleSettings = idleSettings
+        self.isLocked = isLocked
         scan()
         timer = Timer.scheduledTimer(withTimeInterval: Self.pollInterval, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated { self?.scan() }
@@ -115,12 +119,15 @@ final class ClaudeSessionMonitor {
         let nextBoard = board.updated(with: sessions, now: now)
         if nextBoard != board { board = nextBoard }
         refreshQuota(now: now)
+        let screenLocked = isLocked()
         let (next, actions) = limitGuard.advancing(
             quota: quota, sessions: sessions, settings: settings(),
             handoffWritten: { id, since in Self.isHandoffWritten(id, since: since) }, now: now)
         limitGuard = next
-        actions.forEach(run)
-        compactIdle(sessions, now: now)
+        if !screenLocked {
+            actions.forEach(run)
+            compactIdle(sessions, now: now)
+        }
     }
 
     // MARK: - Quota

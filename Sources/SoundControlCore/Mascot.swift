@@ -24,12 +24,26 @@ public enum Mascot: String, Codable, Sendable, CaseIterable, Identifiable {
 public struct MascotPose: Sendable, Equatable {
     /// Distance from the left end of the walk, in points.
     public let x: Double
+    /// Distance from the top of the walk area, in points.
+    public let y: Double
     public let facesRight: Bool
     public let isWalking: Bool
+    public let isPickedUp: Bool
     /// Steps taken so far; the fraction drives the leg swing.
     public let steps: Double
     /// Seconds since this pause or walk began, for blinking and breathing.
     public let elapsed: TimeInterval
+
+    public init(x: Double, y: Double = 0, facesRight: Bool, isWalking: Bool,
+                isPickedUp: Bool = false, steps: Double, elapsed: TimeInterval) {
+        self.x = x
+        self.y = y
+        self.facesRight = facesRight
+        self.isWalking = isWalking
+        self.isPickedUp = isPickedUp
+        self.steps = steps
+        self.elapsed = elapsed
+    }
 }
 
 /// A never-ending stroll: pause at a spot, walk to the next one, pause again.
@@ -48,12 +62,21 @@ public struct MascotRoute: Sendable {
     }
 
     public let seed: UInt64
-    /// How far the mascot can walk, in points.
+    /// How far the mascot can walk horizontally, in points.
     public let width: Double
+    /// How far the mascot can walk vertically, in points (0 for a 1D horizontal stroll).
+    public let height: Double
+    public let startX: Double?
+    public let startY: Double?
 
-    public init(seed: UInt64, width: Double) {
+    public init(seed: UInt64, width: Double, height: Double = 0, startX: Double? = nil, startY: Double? = nil) {
+        let clampedWidth = max(width, 0)
+        let clampedHeight = max(height, 0)
         self.seed = seed
-        self.width = max(width, 0)
+        self.width = clampedWidth
+        self.height = clampedHeight
+        self.startX = startX.map { min(max($0, 0), clampedWidth) }
+        self.startY = startY.map { min(max($0, 0), clampedHeight) }
     }
 
     /// The pose `time` seconds after the stroll began, and the cursor to pass in next time.
@@ -63,22 +86,34 @@ public struct MascotRoute: Sendable {
             current = Cursor(leg: current.leg + 1, start: current.start + duration(of: current.leg))
         }
         let local = max(time - current.start, 0)
-        let from = stop(current.leg)
-        let to = stop(current.leg + 1)
-        let facesRight = to >= from
+        let fromX = stop(current.leg)
+        let toX = stop(current.leg + 1)
+        let fromY = stopY(current.leg)
+        let toY = stopY(current.leg + 1)
+        let dx = toX - fromX
+        let dy = toY - fromY
+        let distance = hypot(dx, dy)
+        let facesRight = dx >= 0
         let pause = pause(current.leg)
-        guard local >= pause, to != from else {
-            return (MascotPose(x: from, facesRight: facesRight, isWalking: false, steps: 0, elapsed: local), current)
+        guard local >= pause, distance > 0 else {
+            return (MascotPose(x: fromX, y: fromY, facesRight: facesRight, isWalking: false, steps: 0, elapsed: local), current)
         }
-        let walked = min((local - pause) * Self.speed, abs(to - from))
-        let pose = MascotPose(x: from + (facesRight ? walked : -walked), facesRight: facesRight, isWalking: true,
+        let walked = min((local - pause) * Self.speed, distance)
+        let progress = walked / distance
+        let pose = MascotPose(x: fromX + dx * progress, y: fromY + dy * progress,
+                              facesRight: facesRight, isWalking: true,
                               steps: walked / Self.stepLength, elapsed: local - pause)
         return (pose, current)
     }
 
-    /// The spot where leg `leg` starts.
+    /// The horizontal spot where leg `leg` starts.
     func stop(_ leg: Int) -> Double {
-        leg == 0 ? width / 2 : unit(leg, salt: 1) * width
+        leg == 0 ? (startX ?? width / 2) : unit(leg, salt: 1) * width
+    }
+
+    /// The vertical spot where leg `leg` starts.
+    func stopY(_ leg: Int) -> Double {
+        leg == 0 ? (startY ?? height / 2) : unit(leg, salt: 3) * height
     }
 
     func pause(_ leg: Int) -> TimeInterval {
@@ -86,7 +121,9 @@ public struct MascotRoute: Sendable {
     }
 
     func duration(of leg: Int) -> TimeInterval {
-        pause(leg) + abs(stop(leg + 1) - stop(leg)) / Self.speed
+        let dx = stop(leg + 1) - stop(leg)
+        let dy = stopY(leg + 1) - stopY(leg)
+        return pause(leg) + hypot(dx, dy) / Self.speed
     }
 
     /// A repeatable number in 0..<1 for this leg (SplitMix64).

@@ -11,9 +11,9 @@ enum ModuleTab: String, CaseIterable, Identifiable {
 
     var title: String {
         switch self {
-        case .control: "Control"
+        case .control: "Sound"
         case .screenSaver: "Screen Saver"
-        case .dev: "Dev"
+        case .dev: "Developer"
         }
     }
 

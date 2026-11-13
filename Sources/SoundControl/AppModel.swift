@@ -2,6 +2,7 @@ import AppKit
 import Observation
 import OSLog
 import SoundControlCore
+import UniformTypeIdentifiers
 
 /// The app's single source of truth: owns the config, reacts to monitor events,
 /// and plays sounds. Views read it and call its intent methods.
@@ -38,6 +39,7 @@ final class AppModel {
     let keyboardLock = KeyboardLockController()
     let sessions = ClaudeSessionMonitor()
     let terminalPermissions = TerminalPermissions()
+    let updater = AutoUpdater()
 
     @ObservationIgnored private let store: ConfigStore
     @ObservationIgnored private let soundStore: UserSoundStore
@@ -84,8 +86,19 @@ final class AppModel {
                 self.installScreenSaverHotKey()
                 self.installPopupHotKey()
                 self.sessions.start(settings: { [weak self] in self?.limitGuardSettings ?? .default },
-                                    idleSettings: { [weak self] in self?.idleCompact ?? .default })
-                self.terminalPermissions.start()
+                                    idleSettings: { [weak self] in self?.idleCompact ?? .default },
+                                    isLocked: { [weak self] in self?.keyboardLock.isLocked ?? false })
+                self.terminalPermissions.start(isLocked: { [weak self] in self?.keyboardLock.isLocked ?? false })
+                self.keyboardLock.onUnlock = { [weak self] in
+                    self?.updater.notifyUnlocked()
+                }
+                self.updater.start(
+                    isAutoUpdateEnabled: { [weak self] in self?.appSettings.autoUpdateEnabled ?? true },
+                    isLocked: { [weak self] in self?.keyboardLock.isLocked ?? false }
+                )
+                if self.screenSaver.background == .desktopWallpaper {
+                    ScreenSaverBackgroundStore.cacheDesktopWallpaper()
+                }
                 self.config = self.reconcileTweaks(self.config)
                 self.hub?.reconcile(enabled: self.config.enabledTriggers, isListening: self.config.isListening)
                 self.applyAudioReadiness()
@@ -401,14 +414,39 @@ final class AppModel {
         let next = transform(screenSaver)
         guard next != screenSaver else { return }
         let shortcutChanged = next.shortcut != screenSaver.shortcut
+        let pickedWallpaper = next.background == .desktopWallpaper && screenSaver.background != .desktopWallpaper
         screenSaver = next
         if shortcutChanged { registerScreenSaverShortcut() }
+        if pickedWallpaper { ScreenSaverBackgroundStore.cacheDesktopWallpaper() }
         do {
             try ScreenSaverStore.save(next)
         } catch {
             logger.error("Saving screen saver settings failed: \(error.localizedDescription, privacy: .public)")
             alertMessage = "Could not save the screen saver settings: \(error.localizedDescription)"
         }
+    }
+
+    func chooseScreenSaverBackgroundImage() {
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [.image]
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = false
+        panel.prompt = "Choose Background"
+        NSApp.activate(ignoringOtherApps: true)
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        let isScoped = url.startAccessingSecurityScopedResource()
+        defer { if isScoped { url.stopAccessingSecurityScopedResource() } }
+        do {
+            let name = try ScreenSaverBackgroundStore.importImage(from: url)
+            updateScreenSaver { $0.withCustomBackground(name: name) }
+        } catch {
+            alertMessage = error.localizedDescription
+        }
+    }
+
+    func clearScreenSaverBackgroundImage() {
+        ScreenSaverBackgroundStore.removeCustomImage()
+        updateScreenSaver { $0.withCustomBackground(name: nil) }
     }
 
     private func installScreenSaverHotKey() {
@@ -449,6 +487,17 @@ final class AppModel {
         }
     }
 
+    func setAutoUpdate(_ enabled: Bool) {
+        updateAppSettings { $0.withAutoUpdate(enabled) }
+        if enabled {
+            updater.checkForUpdates(userInitiated: false)
+        }
+    }
+
+    func checkForUpdates() {
+        updater.checkForUpdates(userInitiated: true)
+    }
+
     private func installPopupHotKey() {
         popupHotKey = GlobalHotKey { [weak self] in self?.togglePopup() }
         registerPopupShortcut()
@@ -462,6 +511,7 @@ final class AppModel {
 
     /// Opens the popup on the Control tab, or closes it when it is already open.
     private func togglePopup() {
+        guard !keyboardLock.isLocked else { return }
         menuTab = .control
         isShowingAppSettings = false
         if !MenuBarPopup.toggle() {
@@ -469,11 +519,11 @@ final class AppModel {
         }
     }
 
-    /// Starts the owner-lock screen saver with the current settings.
+    /// Starts the owner-lock screen saver. It reads and changes the settings live, so its drawers can adjust them.
     func lockForOwner() {
-        keyboardLock.lockForOwner(screenSaver: screenSaver, sessions: sessions) { [weak self] id, isPinned in
-            self?.updateScreenSaver { $0.pinning(id, isPinned) }
-        }
+        let link = ScreenSaverLink(read: { [weak self] in self?.screenSaver ?? .default },
+                                   update: { [weak self] transform in self?.updateScreenSaver(transform) })
+        keyboardLock.lockForOwner(link: link, sessions: sessions)
     }
 
     func updatePack(_ id: UUID, _ transform: (CustomPack) -> CustomPack) {

@@ -9,8 +9,11 @@ final class TerminalPermissions {
     private(set) var states: [String: AutomationAccess.State] = [:]
     /// Nil until looked up; finding tmux runs the login shell, so it happens off the main thread.
     private(set) var hasTmux: Bool?
+    /// When the owner last pressed Check again; nil until then.
+    private(set) var lastChecked: Date?
 
     @ObservationIgnored private var launchObserver: NSObjectProtocol?
+    @ObservationIgnored private var isLocked: @MainActor () -> Bool = { false }
 
     /// Terminals installed on this Mac, the only ones worth showing.
     var installed: [AutomationAccess.Terminal] {
@@ -19,7 +22,8 @@ final class TerminalPermissions {
 
     var hasDenied: Bool { states.values.contains(.denied) }
 
-    func start() {
+    func start(isLocked: @escaping @MainActor () -> Bool = { false }) {
+        self.isLocked = isLocked
         guard launchObserver == nil else { return }
         AutomationAccess.terminals.forEach(request)
         Task { [weak self] in
@@ -38,16 +42,23 @@ final class TerminalPermissions {
     /// Checks again, for example after the owner changed the setting in System Settings.
     func refresh() {
         AutomationAccess.terminals.forEach(request)
+        lastChecked = Date()
     }
 
     private func request(_ terminal: AutomationAccess.Terminal) {
+        guard !isLocked() else { return }
         guard AutomationAccess.isRunning(terminal.bundleID) else {
-            states[terminal.bundleID] = states[terminal.bundleID] == .granted ? .granted : .notRunning
+            set(states[terminal.bundleID] == .granted ? .granted : .notRunning, for: terminal.bundleID)
             return
         }
         Task { [weak self] in
             let state = await AutomationAccess.request(terminal.bundleID)
-            self?.states[terminal.bundleID] = state
+            self?.set(state, for: terminal.bundleID)
         }
+    }
+
+    /// Every write redraws the readers, so an unchanged answer is not written again.
+    private func set(_ state: AutomationAccess.State, for bundleID: String) {
+        if states[bundleID] != state { states[bundleID] = state }
     }
 }

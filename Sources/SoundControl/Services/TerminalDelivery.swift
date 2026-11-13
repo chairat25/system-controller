@@ -81,7 +81,7 @@ enum TerminalDelivery {
     }
 
     private static func sendByScript(_ script: String, app bundleID: String, text: String, tty: String) -> Bool {
-        guard AutomationAccess.isRunning(bundleID) else { return false }
+        guard AutomationAccess.isRunning(bundleID), AutomationAccess.isGranted(bundleID) else { return false }
         return run("/usr/bin/osascript", ["-e", script, tty, text])?
             .trimmingCharacters(in: .whitespacesAndNewlines) == "sent"
     }

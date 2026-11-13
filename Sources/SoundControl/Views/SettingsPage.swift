@@ -6,6 +6,14 @@ struct SettingsPage: View {
     @State private var confirmReset = false
 
     var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            PageHeader(title: "Settings", subtitle: "How Sound Control listens, plays and fits in with macOS.") { EmptyView() }
+                .padding([.horizontal, .top], WindowLayout.pagePadding)
+            form
+        }
+    }
+
+    private var form: some View {
         Form {
             Section("General") {
                 Toggle("Listening", isOn: Binding(get: { model.config.isListening },
@@ -27,7 +35,7 @@ struct SettingsPage: View {
                 Toggle("One sound per moment", isOn: Binding(get: { model.config.avoidOverlap },
                                                              set: { value in model.update { $0.withAvoidOverlap(value) } }))
             } header: {
-                Text("Responsiveness")
+                Text("Audio Behavior")
             } footer: {
                 Text("Instant sounds keeps the audio output ready while you use the Mac and lets it rest when you step away, so the Mac still sleeps on its own. One sound per moment plays only the first of several events that happen together, such as wake + display on.")
             }
@@ -60,7 +68,7 @@ struct SettingsPage: View {
                     }
                 }
             } header: {
-                Text("macOS sounds")
+                Text("macOS Integration")
             } footer: {
                 Text("macOS gets its sounds back when you turn the trigger off, pause listening, or quit Sound Control. Interface sound effects may need a log out to fully apply.")
             }
@@ -72,9 +80,31 @@ struct SettingsPage: View {
                 DatePicker("Until", selection: minuteBinding(\.endMinute), displayedComponents: .hourAndMinute)
                     .disabled(!model.config.quietHours.isEnabled)
             } header: {
-                Text("Quiet hours")
+                Text("Quiet Hours")
             } footer: {
                 Text("Nothing plays during this window. It may cross midnight.")
+            }
+
+            Section("Screen Saver") {
+                LabeledContent("Background") {
+                    Text(model.screenSaver.background.title).foregroundStyle(.secondary)
+                }
+                BackgroundControls(settings: model.screenSaver,
+                                   update: model.updateScreenSaver,
+                                   onChoosePhoto: model.chooseScreenSaverBackgroundImage,
+                                   onClearPhoto: model.clearScreenSaverBackgroundImage)
+                Toggle("Hide mascot", isOn: Binding(
+                    get: { model.screenSaver.activeMascot == .none },
+                    set: { isHidden in model.updateScreenSaver { $0.withMascotHidden(isHidden) } }
+                ))
+                LabeledContent("Mascot") {
+                    Text(model.screenSaver.activeMascot.title).foregroundStyle(.secondary)
+                }
+                MascotGrid(selection: model.screenSaver.activeMascot) { mascot in
+                    model.updateScreenSaver { $0.withMascot(mascot) }
+                }
+                .opacity(model.screenSaver.activeMascot == .none ? 0.55 : 1)
+                WidgetLayoutResetButton(settings: model.screenSaver, update: model.updateScreenSaver)
             }
 
             Section("Thresholds") {
@@ -116,13 +146,26 @@ struct SettingsPage: View {
                 Text("Keyboard & mouse triggers need Input Monitoring. Only key codes are checked — nothing you type is read or stored. Lock keyboard needs Accessibility, because it stops keys instead of just listening. After rebuilding the app you may need to grant it again.")
             }
 
-            Section("Data") {
+            Section("Advanced") {
                 Button("Show sounds folder") { model.revealSoundsFolder() }
                 Button("Reset all settings…", role: .destructive) { confirmReset = true }
             }
 
             Section("About") {
                 LabeledContent("Version", value: Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "dev")
+                Toggle("Automatically install updates", isOn: Binding(
+                    get: { model.appSettings.autoUpdateEnabled },
+                    set: { model.setAutoUpdate($0) }
+                ))
+                LabeledContent("Software update") {
+                    HStack(spacing: 10) {
+                        Text(model.updater.statusText)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        Button("Check for Updates") { model.checkForUpdates() }
+                            .disabled(model.updater.isBusyUpdating)
+                    }
+                }
                 LabeledContent("Triggers", value: "\(TriggerID.allCases.count)")
             }
         }

@@ -78,7 +78,9 @@ enum TerminalScreenReader {
     }
 
     private static func capture(_ ttys: [String], script: String, app bundleID: String) -> [String: String] {
-        guard !ttys.isEmpty, AutomationAccess.isRunning(bundleID),
+        guard !ttys.isEmpty,
+              AutomationAccess.isRunning(bundleID),
+              AutomationAccess.isGranted(bundleID),
               let output = TerminalDelivery.run("/usr/bin/osascript", ["-e", script] + ttys)
         else { return [:] }
         return TerminalScreen.parseCaptures(output)

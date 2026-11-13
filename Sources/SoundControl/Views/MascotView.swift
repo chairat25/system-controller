@@ -1,7 +1,8 @@
 import SwiftUI
 import SoundControlCore
 
-/// The chosen animal strolling along the bottom of the screen saver: it walks, stops, breathes and blinks.
+/// The chosen animal roaming across the screen saver: it walks, stops, breathes, blinks,
+/// and can be picked up and dropped anywhere on the screen.
 /// Drawn from a few shapes each frame, so it needs no images; it stops redrawing while the screen is dark.
 struct MascotStroll: View {
     static let size: CGFloat = 64
@@ -14,23 +15,92 @@ struct MascotStroll: View {
     @State private var start = Date()
     @State private var seed = UInt64.random(in: 0...UInt64.max)
     @State private var walker = Walker()
+    @State private var droppedAt: CGPoint?
+    @State private var dragLocation: CGPoint?
+    @State private var dragStartOffset: CGSize?
+    @State private var lastDragX: CGFloat?
+    @State private var dragFacesRight = true
 
     var body: some View {
         GeometryReader { geometry in
-            TimelineView(.animation(minimumInterval: Self.frameInterval, paused: isPaused)) { context in
-                let route = MascotRoute(seed: seed, width: Double(max(geometry.size.width - Self.size, 0)))
-                let pose = walker.pose(on: route, at: context.date.timeIntervalSince(start))
+            let maxX = max(geometry.size.width - Self.size, 0)
+            let maxY = max(geometry.size.height - Self.size, 0)
+            TimelineView(.animation(minimumInterval: Self.frameInterval, paused: isPaused && dragLocation == nil)) { context in
+                let pose = currentPose(maxX: maxX, maxY: maxY, at: context.date)
                 Canvas { graphics, size in
                     MascotArt.draw(mascot, pose: pose, in: &graphics, size: size)
                 }
                 .frame(width: Self.size, height: Self.size)
                 .scaleEffect(x: pose.facesRight ? 1 : -1, y: 1)
-                .offset(x: pose.x)
+                .scaleEffect(pose.isPickedUp ? 1.12 : 1.0)
+                .contentShape(Rectangle())
+                .pointerStyle(dragLocation != nil ? .grabActive : .grabIdle)
+                .gesture(
+                    DragGesture(minimumDistance: 0, coordinateSpace: .named("mascotArea"))
+                        .onChanged { value in
+                            if dragStartOffset == nil {
+                                dragStartOffset = CGSize(
+                                    width: value.startLocation.x - CGFloat(pose.x),
+                                    height: value.startLocation.y - CGFloat(pose.y)
+                                )
+                                dragFacesRight = pose.facesRight
+                                lastDragX = value.location.x
+                            }
+                            if let previousX = lastDragX {
+                                let deltaX = value.location.x - previousX
+                                if abs(deltaX) > 1.5 {
+                                    dragFacesRight = deltaX > 0
+                                    lastDragX = value.location.x
+                                }
+                            }
+                            let offset = dragStartOffset ?? .zero
+                            dragLocation = clampedPoint(
+                                x: value.location.x - offset.width,
+                                y: value.location.y - offset.height,
+                                maxX: maxX,
+                                maxY: maxY
+                            )
+                        }
+                        .onEnded { value in
+                            let offset = dragStartOffset ?? .zero
+                            let drop = clampedPoint(
+                                x: value.location.x - offset.width,
+                                y: value.location.y - offset.height,
+                                maxX: maxX,
+                                maxY: maxY
+                            )
+                            droppedAt = drop
+                            dragLocation = nil
+                            dragStartOffset = nil
+                            lastDragX = nil
+                            seed = UInt64.random(in: 0...UInt64.max)
+                            start = Date()
+                            walker.reset()
+                        }
+                )
+                .position(x: CGFloat(pose.x) + Self.size / 2, y: CGFloat(pose.y) + Self.size / 2)
             }
         }
-        .frame(height: Self.size)
-        .allowsHitTesting(false)
+        .coordinateSpace(name: "mascotArea")
         .accessibilityHidden(true)
+    }
+
+    private func currentPose(maxX: CGFloat, maxY: CGFloat, at date: Date) -> MascotPose {
+        let elapsed = date.timeIntervalSince(start)
+        if let drag = dragLocation {
+            let clamped = clampedPoint(x: drag.x, y: drag.y, maxX: maxX, maxY: maxY)
+            return MascotPose(x: Double(clamped.x), y: Double(clamped.y),
+                              facesRight: dragFacesRight, isWalking: false, isPickedUp: true,
+                              steps: 0, elapsed: elapsed)
+        }
+        let route = MascotRoute(seed: seed, width: Double(maxX), height: Double(maxY),
+                                startX: droppedAt.map { Double($0.x) },
+                                startY: droppedAt.map { Double($0.y) } ?? Double(maxY))
+        return walker.pose(on: route, at: elapsed)
+    }
+
+    private func clampedPoint(x: CGFloat, y: CGFloat, maxX: CGFloat, maxY: CGFloat) -> CGPoint {
+        CGPoint(x: min(max(x, 0), maxX), y: min(max(y, 0), maxY))
     }
 
     /// Keeps the route's cursor between frames, so each frame starts from the current leg.
@@ -42,6 +112,10 @@ struct MascotStroll: View {
             let (pose, next) = route.pose(at: time, from: cursor)
             cursor = next
             return pose
+        }
+
+        func reset() {
+            cursor = .origin
         }
     }
 }
@@ -60,20 +134,29 @@ enum MascotArt {
         let feet: Color
     }
 
-    /// The parts that move: the step cycle, the bounce and the blink.
+    /// The parts that move: the step cycle, the bounce, pickup dangle, and the blink.
     private struct Motion {
         let swing: CGFloat
         let lift: CGFloat
         let bob: CGFloat
         let isBlinking: Bool
+        let isPickedUp: Bool
         let time: TimeInterval
 
         init(_ pose: MascotPose) {
-            let cycle = pose.steps * 2 * .pi
-            swing = pose.isWalking ? CGFloat(sin(cycle)) : 0
-            lift = pose.isWalking ? CGFloat(abs(sin(cycle))) : 0
-            bob = pose.isWalking ? -lift * 2.5 : CGFloat(sin(pose.elapsed * 2.2)) * 0.6
-            isBlinking = pose.elapsed.truncatingRemainder(dividingBy: MascotArt.blinkPeriod) < MascotArt.blinkLength
+            isPickedUp = pose.isPickedUp
+            if pose.isPickedUp {
+                swing = CGFloat(sin(pose.elapsed * 18)) * 1.1
+                lift = 1.0
+                bob = -5 + CGFloat(sin(pose.elapsed * 8)) * 1.2
+                isBlinking = false
+            } else {
+                let cycle = pose.steps * 2 * .pi
+                swing = pose.isWalking ? CGFloat(sin(cycle)) : 0
+                lift = pose.isWalking ? CGFloat(abs(sin(cycle))) : 0
+                bob = pose.isWalking ? -lift * 2.5 : CGFloat(sin(pose.elapsed * 2.2)) * 0.6
+                isBlinking = pose.elapsed.truncatingRemainder(dividingBy: MascotArt.blinkPeriod) < MascotArt.blinkLength
+            }
             time = pose.elapsed
         }
     }
@@ -82,7 +165,8 @@ enum MascotArt {
         guard mascot != .none else { return }
         graphics.scaleBy(x: size.width / canvas, y: size.height / canvas)
         let motion = Motion(pose)
-        if mascot == .penguin, pose.isWalking {
+        drawShadow(motion, in: &graphics)
+        if mascot == .penguin, pose.isWalking || pose.isPickedUp {
             // Penguins waddle: the whole body rocks around the feet.
             graphics.translateBy(x: 34, y: 66)
             graphics.rotate(by: .degrees(Double(motion.swing) * 6))
@@ -116,9 +200,17 @@ enum MascotArt {
 
     // MARK: - Parts
 
+    private static func drawShadow(_ motion: Motion, in graphics: inout GraphicsContext) {
+        let shadow = motion.isPickedUp
+            ? CGRect(x: 23, y: 65, width: 24, height: 4)
+            : CGRect(x: 18, y: 63, width: 34, height: 6)
+        graphics.fill(Path(ellipseIn: shadow), with: .color(.black.opacity(motion.isPickedUp ? 0.16 : 0.28)))
+    }
+
     private static func drawFeet(_ look: Look, _ motion: Motion, in graphics: inout GraphicsContext) {
-        let back = CGRect(x: 21 + motion.swing * 3, y: 61 - max(motion.swing, 0) * 2, width: 10, height: 7)
-        let front = CGRect(x: 37 - motion.swing * 3, y: 61 - max(-motion.swing, 0) * 2, width: 10, height: 7)
+        let footDrop: CGFloat = motion.isPickedUp ? -3 : 0
+        let back = CGRect(x: 21 + motion.swing * 3, y: 61 + footDrop - max(motion.swing, 0) * 2, width: 10, height: 7)
+        let front = CGRect(x: 37 - motion.swing * 3, y: 61 + footDrop - max(-motion.swing, 0) * 2, width: 10, height: 7)
         graphics.fill(Path(ellipseIn: back), with: .color(look.feet))
         graphics.fill(Path(ellipseIn: front), with: .color(look.feet))
     }
@@ -226,7 +318,11 @@ enum MascotArt {
                           with: .color(Color(red: 1, green: 0.66, blue: 0.25)))
         case .puppy, .panda:
             graphics.fill(Path(ellipseIn: CGRect(x: 39.5, y: 32 + y, width: 5, height: 3.4)), with: .color(Self.eyeColor))
-            drawMouth(at: CGPoint(x: 42, y: 35.5 + y), in: &graphics)
+            if motion.isPickedUp {
+                graphics.fill(Path(ellipseIn: CGRect(x: 40.3, y: 35.2 + y, width: 3.4, height: 3.8)), with: .color(Self.eyeColor))
+            } else {
+                drawMouth(at: CGPoint(x: 42, y: 35.5 + y), in: &graphics)
+            }
             if mascot == .puppy, pose.isWalking {
                 graphics.fill(Path(ellipseIn: CGRect(x: 40.5, y: 36.5 + y, width: 3.4, height: 3.6)),
                               with: .color(Color(red: 1, green: 0.5, blue: 0.55)))
@@ -234,7 +330,11 @@ enum MascotArt {
         case .cat, .bunny:
             graphics.fill(triangle(CGPoint(x: 40.5, y: 32.5 + y), CGPoint(x: 43.5, y: 32.5 + y), CGPoint(x: 42, y: 34.5 + y)),
                           with: .color(Color(red: 1, green: 0.5, blue: 0.6)))
-            drawMouth(at: CGPoint(x: 42, y: 34.5 + y), in: &graphics)
+            if motion.isPickedUp {
+                graphics.fill(Path(ellipseIn: CGRect(x: 40.3, y: 34.8 + y, width: 3.4, height: 3.8)), with: .color(Self.eyeColor))
+            } else {
+                drawMouth(at: CGPoint(x: 42, y: 34.5 + y), in: &graphics)
+            }
             if mascot == .cat { drawWhiskers(y: y, in: &graphics) }
         case .none:
             break

@@ -2,9 +2,17 @@ import SwiftUI
 import SoundControlCore
 
 enum Theme {
-    static let accent = Color(red: 0.56, green: 0.43, blue: 1.0)
+    /// Brand purple (#9670FF): sound icons, audio actions, active toggles and the selected pack.
+    static let accent = Color(red: 0.588, green: 0.439, blue: 1.0)
     static let accentSoft = accent.opacity(0.16)
-    static let warning = Color.orange
+    static let warning = Color(red: 1.0, green: 0.62, blue: 0.04)
+    static let success = Color(red: 0.19, green: 0.82, blue: 0.35)
+    static let danger = Color(red: 1.0, green: 0.27, blue: 0.23)
+    /// Grouped sections in the popover: a faint fill and a hairline, no heavy cards.
+    static let groupFill = Color.primary.opacity(0.045)
+    static let hairline = Color.primary.opacity(0.08)
+    static let groupRadius: CGFloat = 10
+    static let rowIconWidth: CGFloat = 18
     /// Status dot of a Claude session that is working.
     static let working = Color(red: 0.2, green: 0.85, blue: 0.4)
     static let cardRadius: CGFloat = 12
@@ -64,10 +72,11 @@ struct PageHeader<Accessory: View>: View {
     @ViewBuilder let accessory: Accessory
 
     var body: some View {
-        HStack(alignment: .top) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text(title).font(.largeTitle.weight(.bold))
-                Text(subtitle).foregroundStyle(.secondary)
+        HStack(alignment: .top, spacing: Spacing.control) {
+            VStack(alignment: .leading, spacing: Spacing.micro) {
+                Text(title).font(.largeTitle.weight(.semibold))
+                Text(subtitle).font(.callout).foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
             Spacer()
             accessory
@@ -89,6 +98,7 @@ struct PlayButton: View {
         }
         .buttonStyle(.plain)
         .help("Preview")
+        .accessibilityLabel("Preview sound")
     }
 }
 

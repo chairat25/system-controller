@@ -28,19 +28,28 @@ enum AutomationAccess {
         NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID) != nil
     }
 
+    /// Checks whether Automation permission is already granted without showing a macOS consent prompt.
+    static func isGranted(_ bundleID: String) -> Bool {
+        permissionState(bundleID, askUser: false) == .granted
+    }
+
     /// Shows the macOS consent prompt when it has not been answered yet. Blocks while the prompt is up, so it runs off the main thread.
     static func request(_ bundleID: String) async -> State {
         await Task.detached(priority: .utility) {
-            let target = NSAppleEventDescriptor(bundleIdentifier: bundleID)
-            guard let address = target.aeDesc else { return State.unknown }
-            let status = AEDeterminePermissionToAutomateTarget(address, typeWildCard, typeWildCard, true)
-            switch Int(status) {
-            case Int(noErr): return .granted
-            case errAEEventNotPermitted: return .denied
-            case procNotFound: return .notRunning
-            default: return .unknown
-            }
+            permissionState(bundleID, askUser: true)
         }.value
+    }
+
+    private static func permissionState(_ bundleID: String, askUser: Bool) -> State {
+        let target = NSAppleEventDescriptor(bundleIdentifier: bundleID)
+        guard let address = target.aeDesc else { return .unknown }
+        let status = AEDeterminePermissionToAutomateTarget(address, typeWildCard, typeWildCard, askUser)
+        switch Int(status) {
+        case Int(noErr): return .granted
+        case errAEEventNotPermitted: return .denied
+        case procNotFound: return .notRunning
+        default: return .unknown
+        }
     }
 
     static func openSettings() {

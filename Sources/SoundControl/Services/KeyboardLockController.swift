@@ -16,20 +16,20 @@ final class KeyboardLockController {
     @ObservationIgnored private var overlay: KeyboardLockOverlay?
     @ObservationIgnored private var expiry: DispatchWorkItem?
     @ObservationIgnored private var isAuthenticating = false
+    @ObservationIgnored var onUnlock: (@MainActor () -> Void)?
 
     var isLocked: Bool { lock != nil }
 
     func lockKeyboard() {
-        startLock(.holdButton, screenSaver: .default, sessions: nil, onPin: { _, _ in })
+        startLock(.holdButton, link: .fixed(.default), sessions: nil)
     }
 
-    func lockForOwner(screenSaver: ScreenSaverSettings, sessions: ClaudeSessionMonitor,
-                      onPin: @escaping @MainActor (String, Bool) -> Void) {
+    func lockForOwner(link: ScreenSaverLink, sessions: ClaudeSessionMonitor) {
         guard OwnerAuth.isAvailable else {
             problem = OwnerAuth.setupMessage
             return
         }
-        startLock(.ownerAuthentication, screenSaver: screenSaver, sessions: sessions, onPin: onPin)
+        startLock(.ownerAuthentication, link: link, sessions: sessions)
     }
 
     func unlockKeyboard() {
@@ -39,12 +39,12 @@ final class KeyboardLockController {
         overlay?.close()
         overlay = nil
         lock = nil
+        onUnlock?()
         // Full-screen views on every display leave a lot of freed heap behind; give those pages back now.
         DispatchQueue.main.async { malloc_zone_pressure_relief(nil, 0) }
     }
 
-    private func startLock(_ unlock: UnlockMethod, screenSaver: ScreenSaverSettings, sessions: ClaudeSessionMonitor?,
-                           onPin: @escaping @MainActor (String, Bool) -> Void) {
+    private func startLock(_ unlock: UnlockMethod, link: ScreenSaverLink, sessions: ClaudeSessionMonitor?) {
         guard lock == nil else { return }
         guard KeyboardBlocker.hasPermission else {
             KeyboardBlocker.requestPermission()
@@ -58,7 +58,7 @@ final class KeyboardLockController {
         let next = KeyboardLock(lockedAt: Date(), unlock: unlock)
         problem = nil
         lock = next
-        overlay = KeyboardLockOverlay(lock: next, screenSaver: screenSaver, sessions: sessions, onPin: onPin, onUnlock: { [weak self] in self?.unlockKeyboard() },
+        overlay = KeyboardLockOverlay(lock: next, link: link, sessions: sessions, onUnlock: { [weak self] in self?.unlockKeyboard() },
                                       onPasswordPrompt: { [weak self] in Task { await self?.unlockWithPassword() } })
         if next.expires { scheduleExpiry() }
     }
@@ -67,14 +67,19 @@ final class KeyboardLockController {
     private func unlockWithPassword() async {
         guard !isAuthenticating else { return }
         isAuthenticating = true
+        overlay?.setPasswordPromptActive(true)
         blocker.passesKeys = true
         let outcome = await OwnerAuth.authenticate()
         blocker.passesKeys = false
         isAuthenticating = false
         switch outcome {
-        case .unlocked: unlockKeyboard()
-        case .cancelled: break
-        case .failed(let message): problem = message
+        case .unlocked:
+            unlockKeyboard()
+        case .cancelled:
+            overlay?.setPasswordPromptActive(false)
+        case .failed(let message):
+            overlay?.setPasswordPromptActive(false)
+            problem = message
         }
     }
 

@@ -1,84 +1,169 @@
 import SwiftUI
 import SoundControlCore
 
-/// Sound Control tab of the menu-bar popover: quick controls and the latest events.
+/// Sound tab of the menu-bar popover: the sound engine, volume and pack, quick lock actions, and the latest events.
 struct SoundPanel: View {
     @Environment(AppModel.self) private var model
     private static let recentCount = 5
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Image(systemName: "waveform.circle.fill").font(.title2).foregroundStyle(Theme.accent)
-                VStack(alignment: .leading, spacing: 0) {
+        VStack(alignment: .leading, spacing: Spacing.section) {
+            engine
+            volumeAndPack
+            QuickActions()
+            recent
+        }
+    }
+
+    private var engine: some View {
+        let isOn = model.config.isListening
+        let count = model.config.enabledTriggers.count
+        return PopoverSection("Sound Engine") {
+            HStack(spacing: Spacing.control) {
+                Image(systemName: "waveform.circle.fill")
+                    .font(.title)
+                    .foregroundStyle(isOn ? Theme.accent : .secondary)
+                VStack(alignment: .leading, spacing: 2) {
                     Text("Sound Control").font(.headline)
-                    Text("\(model.config.enabledTriggers.count) triggers on").font(.caption).foregroundStyle(.secondary)
+                    StatusIndicator(text: isOn ? "Listening · \(count) trigger\(count == 1 ? "" : "s") on" : "Paused",
+                                    level: isOn ? .good : .off)
                 }
-                Spacer()
-                Toggle("", isOn: Binding(get: { model.config.isListening },
-                                         set: { value in model.update { $0.withListening(value) } }))
+                Spacer(minLength: Spacing.related)
+                Toggle("Sound Control", isOn: Binding(get: { isOn },
+                                                      set: { value in model.update { $0.withListening(value) } }))
                     .toggleStyle(.switch)
                     .labelsHidden()
                     .tint(Theme.accent)
             }
+        }
+    }
 
-            HStack {
-                Image(systemName: "speaker.fill").foregroundStyle(.secondary)
-                Slider(value: Binding(get: { model.config.masterVolume },
+    private var volumeAndPack: some View {
+        let volume = model.config.masterVolume
+        return PopoverSection("Volume & Sound Pack") {
+            HStack(spacing: Spacing.related) {
+                Image(systemName: volume == 0 ? "speaker.slash.fill" : "speaker.fill")
+                    .foregroundStyle(.secondary)
+                    .frame(width: Theme.rowIconWidth)
+                Slider(value: Binding(get: { volume },
                                       set: { value in model.update { $0.withMasterVolume(value) } }), in: 0...1)
-                Image(systemName: "speaker.wave.3.fill").foregroundStyle(.secondary)
+                    .tint(Theme.accent)
+                Text("\(Int((volume * 100).rounded()))%")
+                    .font(.caption.monospacedDigit())
+                    .foregroundStyle(.secondary)
+                    .frame(width: 34, alignment: .trailing)
             }
-
-            Picker("Pack", selection: Binding(get: { model.config.activePack },
-                                              set: { value in model.update { $0.selectingPack(value) } })) {
-                ForEach(BuiltInPack.allCases, id: \.self) { Text($0.title).tag(PackSelection.builtIn($0)) }
-                if !model.config.customPacks.isEmpty {
-                    Divider()
-                    ForEach(model.config.customPacks) { Text($0.name).tag(PackSelection.custom($0.id)) }
+            SettingRow("Pack", systemImage: "square.stack.3d.up") {
+                Picker("Pack", selection: Binding(get: { model.config.activePack },
+                                                  set: { value in model.update { $0.selectingPack(value) } })) {
+                    ForEach(BuiltInPack.allCases, id: \.self) { Text($0.title).tag(PackSelection.builtIn($0)) }
+                    if !model.config.customPacks.isEmpty {
+                        Divider()
+                        ForEach(model.config.customPacks) { Text($0.name).tag(PackSelection.custom($0.id)) }
+                    }
                 }
+                .labelsHidden()
+                .fixedSize()
             }
+        }
+    }
 
-            KeyboardLockRow()
-
-            Divider()
-            Text("RECENT").font(.caption2.weight(.bold)).foregroundStyle(.secondary)
+    private var recent: some View {
+        PopoverSection("Recent Activity") {
+            if model.log.entries.count > Self.recentCount {
+                OpenWindowLink(title: "Show all")
+            }
+        } content: {
             if model.log.entries.isEmpty {
-                Text("No events yet").font(.callout).foregroundStyle(.tertiary)
+                Footnote("No events yet. Plug in the charger or lock the screen to hear one.")
             } else {
-                ForEach(model.log.entries.prefix(Self.recentCount)) { entry in
-                    ActivityRow(entry: entry, compact: true)
+                VStack(spacing: Spacing.related) {
+                    ForEach(model.log.entries.prefix(Self.recentCount)) { entry in
+                        EventListItem(entry: entry)
+                    }
                 }
             }
         }
     }
 }
 
-/// Starts a keyboard lock: the cleaning lock (hold to unlock) or the owner lock (Touch ID / password).
-/// Explains the Accessibility permission when macOS refuses it.
-private struct KeyboardLockRow: View {
+/// Utility actions that lock the keyboard. Explains the Accessibility permission when macOS refuses it.
+private struct QuickActions: View {
     @Environment(AppModel.self) private var model
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            lockButton("Lock keyboard for cleaning", systemImage: "keyboard.badge.ellipsis") {
-                model.keyboardLock.lockKeyboard()
+        let isLocked = model.keyboardLock.isLocked
+        PopoverSection("Quick Actions") {
+            if isLocked {
+                StatusIndicator(text: "Locked", level: .pending)
             }
-            lockButton("Lock for owner (screen stays on)", systemImage: "touchid") {
-                model.lockForOwner()
-            }
+        } content: {
+            SecondaryActionButton(title: "Lock keyboard for cleaning", systemImage: "keyboard.badge.ellipsis",
+                                  isDisabled: isLocked) { model.keyboardLock.lockKeyboard() }
+            SecondaryActionButton(title: "Lock for owner (screen stays on)", systemImage: "touchid",
+                                  isDisabled: isLocked) { model.lockForOwner() }
             if let problem = model.keyboardLock.problem {
-                Text(problem).font(.caption).foregroundStyle(Theme.warning)
+                Footnote(problem, tone: Theme.warning)
                 Button("Open Accessibility Settings") { PrivacySettings.openAccessibility() }
                     .font(.caption)
             }
         }
     }
+}
 
-    private func lockButton(_ title: String, systemImage: String, start: @escaping () -> Void) -> some View {
-        Button(action: start) {
-            Label(title, systemImage: systemImage).frame(maxWidth: .infinity)
+/// One sound event: what happened, which sound played or why it was skipped, and when.
+struct EventListItem: View {
+    let entry: ActivityEntry
+
+    var body: some View {
+        let info = TriggerCatalog.info(for: entry.trigger)
+        HStack(spacing: Spacing.related) {
+            SymbolTile(symbol: info.symbol, isActive: entry.didPlay, size: 24)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(info.title).font(.callout).lineLimit(1)
+                outcome
+            }
+            Spacer(minLength: Spacing.related)
+            Text(entry.date, style: .time)
+                .font(.caption.monospacedDigit())
+                .foregroundStyle(.secondary)
         }
-        .controlSize(.large)
-        .disabled(model.keyboardLock.isLocked)
+        .opacity(entry.didPlay ? 1 : 0.75)
+        .accessibilityElement(children: .combine)
+    }
+
+    @ViewBuilder
+    private var outcome: some View {
+        if let reason = entry.skipReason {
+            Label(withContext("Skipped · \(reason.rawValue)"), systemImage: "forward.end")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+        } else {
+            Label(withContext(entry.soundName ?? "Sound"), systemImage: "music.note")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+        }
+    }
+
+    private func withContext(_ outcome: String) -> String {
+        guard let context = entry.context, !context.isEmpty else { return outcome }
+        return "\(context) · \(outcome)"
+    }
+}
+
+/// Opens the full Sound Control window, where every event, trigger and pack lives.
+struct OpenWindowLink: View {
+    @Environment(\.openWindow) private var openWindow
+    let title: String
+
+    var body: some View {
+        Button(title) {
+            openWindow(id: "main")
+            NSApp.activate()
+        }
+        .buttonStyle(.link)
+        .font(.caption)
     }
 }
