@@ -17,6 +17,9 @@ struct ScreenSaverView<Unlock: View, Corner: View>: View {
 
     @State private var itemSizes: [ScreenSaverItem: CGSize] = [:]
     @State private var activeDrag: ActiveWidgetDrag?
+    /// Live size while pinching or dragging a resize handle, saved when the gesture ends.
+    @State private var activeResize: (item: ScreenSaverItem, scale: Double)?
+    @State private var hoveredItem: ScreenSaverItem?
 
     private var screen: Double { dimmer.brightness }
 
@@ -35,12 +38,14 @@ struct ScreenSaverView<Unlock: View, Corner: View>: View {
                     .opacity(light)
             }
             widgetsCanvas
-            header
+            if settings.showsTitle {
+                header
                 .opacity(screen)
                 .padding(.top, Layout.topInset)
                 .padding(.horizontal, Layout.sideInset)
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
                 .allowsHitTesting(false)
+            }
             unlock()
                 .padding(.bottom, Layout.bottomInset)
                 .padding(.horizontal, Layout.sideInset)
@@ -58,7 +63,7 @@ struct ScreenSaverView<Unlock: View, Corner: View>: View {
         VStack(spacing: 6) {
             HStack(spacing: 10) {
                 Image(systemName: "heart.fill").foregroundStyle(Theme.accent)
-                Text("Smartheart Screen Saver").font(.title2.weight(.semibold))
+                Text(settings.title).lineLimit(1).font(.title2.weight(.semibold))
             }
             Text("Only the owner can unlock.").font(.callout).foregroundStyle(.secondary)
         }
@@ -67,7 +72,10 @@ struct ScreenSaverView<Unlock: View, Corner: View>: View {
     private var widgetsCanvas: some View {
         GeometryReader { proxy in
             let canvas = CanvasSize(width: Double(proxy.size.width), height: Double(proxy.size.height))
-            let measured = itemSizes.mapValues { CanvasSize(width: Double($0.width), height: Double($0.height)) }
+            let measured: [ScreenSaverItem: CanvasSize] = Dictionary(uniqueKeysWithValues: itemSizes.map { item, size in
+                let scale = scale(of: item)
+                return (item, CanvasSize(width: Double(size.width) * scale, height: Double(size.height) * scale))
+            })
             let visibleItems = settings.widgetOrder.filter { isVisible($0) }
             let effectiveOrder: [ScreenSaverItem] = {
                 guard let dragging = activeDrag?.item, visibleItems.contains(dragging) else {
@@ -99,6 +107,15 @@ struct ScreenSaverView<Unlock: View, Corner: View>: View {
                                 itemSizes[item] = newSize
                             }
                         }
+                        .overlay(alignment: .bottomTrailing) {
+                            if hoveredItem == item || activeResize?.item == item {
+                                resizeHandle(for: item)
+                            }
+                        }
+                        .onHover { inside in
+                            if inside { hoveredItem = item } else if hoveredItem == item { hoveredItem = nil }
+                        }
+                        .scaleEffect(scale(of: item))
                         .opacity(opacity)
                         .scaleEffect(isDragging ? 1.02 : 1.0)
                         .animation(.spring(response: 0.25, dampingFraction: 0.85), value: isDragging)
@@ -106,11 +123,60 @@ struct ScreenSaverView<Unlock: View, Corner: View>: View {
                         .position(x: center.x, y: center.y)
                         .zIndex(isDragging ? 500 : Double(index))
                         .simultaneousGesture(dragGesture(for: item, currentCenter: center, measured: measured, canvas: canvas))
+                        .simultaneousGesture(pinchGesture(for: item))
                 }
             }
             .frame(width: proxy.size.width, height: proxy.size.height)
             .coordinateSpace(name: Layout.canvasSpace)
         }
+    }
+
+    private func scale(of item: ScreenSaverItem) -> Double {
+        if let activeResize, activeResize.item == item { return activeResize.scale }
+        return settings.scale(of: item)
+    }
+
+    private static func clampScale(_ value: Double) -> Double {
+        min(max(value, ScreenSaverSettings.scaleRange.lowerBound), ScreenSaverSettings.scaleRange.upperBound)
+    }
+
+    private func pinchGesture(for item: ScreenSaverItem) -> some Gesture {
+        MagnifyGesture()
+            .onChanged { value in
+                activeResize = (item, Self.clampScale(settings.scale(of: item) * value.magnification))
+            }
+            .onEnded { value in
+                let final = Self.clampScale(settings.scale(of: item) * value.magnification)
+                activeResize = nil
+                onUpdate { $0.scaling(item, to: final) }
+            }
+    }
+
+    /// Drag the corner to grow or shrink the widget. Drawn inside the scaled widget, so the
+    /// distance is divided by its current size to keep the corner under the pointer.
+    private func resizeHandle(for item: ScreenSaverItem) -> some View {
+        let base = itemSizes[item] ?? CGSize(width: 200, height: 200)
+        let diagonal = max(Double(hypot(base.width, base.height)), 1)
+        return Image(systemName: "arrow.up.left.and.arrow.down.right")
+            .font(.system(size: 11, weight: .bold))
+            .padding(6)
+            .background(Circle().fill(Color.white.opacity(0.18)))
+            .padding(4)
+            .contentShape(Circle())
+            .pointerStyle(.frameResize(position: .bottomTrailing))
+            .help("Drag to resize")
+            .highPriorityGesture(
+                DragGesture(minimumDistance: 1, coordinateSpace: .named(Layout.canvasSpace))
+                    .onChanged { value in
+                        let grow = Double(value.translation.width + value.translation.height) / diagonal
+                        activeResize = (item, Self.clampScale(settings.scale(of: item) + grow))
+                    }
+                    .onEnded { _ in
+                        let final = activeResize?.scale ?? settings.scale(of: item)
+                        activeResize = nil
+                        onUpdate { $0.scaling(item, to: final) }
+                    }
+            )
     }
 
     private func isVisible(_ item: ScreenSaverItem) -> Bool {

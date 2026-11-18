@@ -10,7 +10,6 @@ import SoundControlCore
 @Observable
 final class OwnerScanController {
     private(set) var isMatched = false
-    private(set) var isHolding = false
     /// The gauge is full after a match: the capsule says so before the overlay goes away.
     private(set) var isWelcomed = false
     private(set) var isPaused = false
@@ -31,10 +30,6 @@ final class OwnerScanController {
         self.activeScreenIndex = activeScreenIndex
         self.onUnlock = onUnlock
         self.onPasswordPrompt = onPasswordPrompt
-    }
-
-    func setHolding(_ holding: Bool) {
-        if isHolding != holding { isHolding = holding }
     }
 
     func sensorDidMoveToWindow(forScreen index: Int) {
@@ -170,8 +165,8 @@ struct OwnerScanView: View {
                 }
             }
             GaugeCapsule(title: controller.isWelcomed ? "Welcome back" : "Hold to unlock",
-                         isFilled: controller.isMatched || controller.isHolding,
-                         fillDuration: controller.isMatched ? Timing.matchFill : KeyboardLock.holdToUnlock,
+                         isFilled: controller.isMatched,
+                         fillDuration: Timing.matchFill,
                          showsTitle: controller.isWelcomed) {
                 if controller.isWelcomed {
                     Image(systemName: "checkmark.circle.fill")
@@ -180,11 +175,7 @@ struct OwnerScanView: View {
                 }
             }
             .animation(.smooth(duration: Timing.welcomeFade), value: controller.isWelcomed)
-            .contentShape(Capsule())
-            .onLongPressGesture(minimumDuration: .infinity, maximumDistance: 40) {
-            } onPressingChanged: { isPressing in
-                controller.setHolding(isPressing)
-            }
+            .allowsHitTesting(false)
             if !controller.isPaused && controller.failure == nil {
                 Text("Keep your finger on Touch ID").font(.callout).foregroundStyle(.secondary)
             }

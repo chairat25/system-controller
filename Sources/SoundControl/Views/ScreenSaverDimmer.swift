@@ -12,7 +12,8 @@ final class ScreenSaverDimmer {
 
     private(set) var brightness = 1.0
     /// The owner's choice in the drawers: show the dimmed look while a drawer is open.
-    var isPreviewWanted = true {
+    /// Off by default: a fully dark level would hide every change made in the drawer.
+    var isPreviewWanted = false {
         didSet { tick() }
     }
 

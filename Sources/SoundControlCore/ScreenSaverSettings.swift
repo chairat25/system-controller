@@ -76,6 +76,10 @@ public struct ScreenSaverSettings: Codable, Sendable, Equatable {
     public static let maximumDimAfter = 3600
     public static let maximumFade = 3600
     public static let maximumPins = 20
+    public static let defaultTitle = "Smartheart Screen Saver"
+    public static let maximumTitleLength = 60
+    public static let maximumRecentTitles = 8
+    public static let scaleRange: ClosedRange<Double> = 0.5...2
     public static let `default` = ScreenSaverSettings(widgets: [.clock, .calendar, .claudeUsage],
                                                       isDimEnabled: true, dimAfterSeconds: 60,
                                                       dimLevel: 0, fadeSeconds: 120)
@@ -114,6 +118,14 @@ public struct ScreenSaverSettings: Codable, Sendable, Equatable {
     public let widgetPositions: [String: WidgetPosition]
     /// Bottom-to-top Z-stacking order of screen saver items (last item sits topmost).
     public let widgetOrder: [ScreenSaverItem]
+    /// Text across the top of the screen saver.
+    public let title: String
+    /// False hides the title line and its subtitle.
+    public let showsTitle: Bool
+    /// Titles typed before, newest first, offered as suggestions.
+    public let recentTitles: [String]
+    /// Size multiplier per `ScreenSaverItem.rawValue`, within `scaleRange`. Missing means 1.
+    public let widgetScales: [String: Double]
 
     /// The mascot shown on the screen saver (`.none` when hidden).
     public var activeMascot: Mascot {
@@ -121,7 +133,7 @@ public struct ScreenSaverSettings: Codable, Sendable, Equatable {
     }
 
     public var hasCustomWidgetLayout: Bool {
-        !widgetPositions.isEmpty || widgetOrder != ScreenSaverItem.allCases
+        !widgetPositions.isEmpty || widgetOrder != ScreenSaverItem.allCases || !widgetScales.isEmpty
     }
 
     public init(widgets: [ScreenSaverWidget], isDimEnabled: Bool, dimAfterSeconds: Int,
@@ -133,7 +145,9 @@ public struct ScreenSaverSettings: Codable, Sendable, Equatable {
                 isMascotBright: Bool = false, mascotLevel: Double = 1,
                 background: ScreenSaverBackground = .pitchBlack, customBackgroundName: String? = nil,
                 widgetPositions: [String: WidgetPosition] = [:],
-                widgetOrder: [ScreenSaverItem] = ScreenSaverItem.allCases) {
+                widgetOrder: [ScreenSaverItem] = ScreenSaverItem.allCases,
+                title: String = Self.defaultTitle, showsTitle: Bool = true, recentTitles: [String] = [],
+                widgetScales: [String: Double] = [:]) {
         // Rebuilt from `allCases` so the order is fixed and a widget can never appear twice.
         self.widgets = ScreenSaverWidget.allCases.filter(widgets.contains)
         self.isDimEnabled = isDimEnabled
@@ -157,6 +171,15 @@ public struct ScreenSaverSettings: Codable, Sendable, Equatable {
         let validKeys = Set(ScreenSaverItem.allCases.map(\.rawValue))
         self.widgetPositions = widgetPositions.filter { validKeys.contains($0.key) }
         self.widgetOrder = Self.normalizedOrder(widgetOrder)
+        self.title = Self.cleanTitle(title) ?? Self.defaultTitle
+        self.showsTitle = showsTitle
+        var seenTitles = Set<String>()
+        self.recentTitles = Array(recentTitles.compactMap(Self.cleanTitle)
+            .filter { seenTitles.insert($0.lowercased()).inserted }
+            .prefix(Self.maximumRecentTitles))
+        self.widgetScales = widgetScales
+            .filter { validKeys.contains($0.key) && $0.value.isFinite }
+            .mapValues { min(max($0, Self.scaleRange.lowerBound), Self.scaleRange.upperBound) }
     }
 
     /// Missing or out-of-range fields fall back to defaults instead of failing the whole file.
@@ -188,7 +211,11 @@ public struct ScreenSaverSettings: Codable, Sendable, Equatable {
                 ?? fallback.background,
             customBackgroundName: try? container.decodeIfPresent(String.self, forKey: .customBackgroundName),
             widgetPositions: (try? container.decodeIfPresent([String: WidgetPosition].self, forKey: .widgetPositions)) ?? [:],
-            widgetOrder: (try? container.decodeIfPresent([ScreenSaverItem].self, forKey: .widgetOrder)) ?? ScreenSaverItem.allCases)
+            widgetOrder: (try? container.decodeIfPresent([ScreenSaverItem].self, forKey: .widgetOrder)) ?? ScreenSaverItem.allCases,
+            title: (try? container.decodeIfPresent(String.self, forKey: .title)) ?? nil ?? Self.defaultTitle,
+            showsTitle: (try? container.decodeIfPresent(Bool.self, forKey: .showsTitle)) ?? nil ?? true,
+            recentTitles: (try? container.decodeIfPresent([String].self, forKey: .recentTitles)) ?? nil ?? [],
+            widgetScales: (try? container.decodeIfPresent([String: Double].self, forKey: .widgetScales)) ?? nil ?? [:])
     }
 
     public func shows(_ widget: ScreenSaverWidget) -> Bool {
@@ -201,6 +228,25 @@ public struct ScreenSaverSettings: Codable, Sendable, Equatable {
 
     public func position(for item: ScreenSaverItem) -> WidgetPosition? {
         widgetPositions[item.rawValue]
+    }
+
+    public func scale(of item: ScreenSaverItem) -> Double {
+        widgetScales[item.rawValue] ?? 1
+    }
+
+    public func scaling(_ item: ScreenSaverItem, to value: Double) -> Self {
+        var next = widgetScales
+        next[item.rawValue] = value
+        return copy(widgetScales: next)
+    }
+
+    public func withShowsTitle(_ value: Bool) -> Self { copy(showsTitle: value) }
+
+    /// Sets the title and remembers it for suggestions. Blank text goes back to the default title.
+    public func withTitle(_ value: String) -> Self {
+        guard let clean = Self.cleanTitle(value) else { return copy(title: Self.defaultTitle) }
+        let history = clean == Self.defaultTitle ? recentTitles : [clean] + recentTitles
+        return copy(title: clean, recentTitles: history)
     }
 
     public func zIndex(of item: ScreenSaverItem) -> Int {
@@ -234,7 +280,7 @@ public struct ScreenSaverSettings: Codable, Sendable, Equatable {
     }
 
     public func resetWidgetLayout() -> Self {
-        copy(widgetPositions: [:], widgetOrder: ScreenSaverItem.allCases)
+        copy(widgetPositions: [:], widgetOrder: ScreenSaverItem.allCases, widgetScales: [:])
     }
     public func withClockBright(_ value: Bool) -> Self { copy(isClockBright: value) }
     public func withClockLevel(_ value: Double) -> Self { copy(clockLevel: value) }
@@ -292,6 +338,11 @@ public struct ScreenSaverSettings: Codable, Sendable, Equatable {
         value.isFinite ? min(max(value, 0), 1) : fallback
     }
 
+    private static func cleanTitle(_ value: String) -> String? {
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : String(trimmed.prefix(maximumTitleLength))
+    }
+
     private static func normalizedOrder(_ order: [ScreenSaverItem]) -> [ScreenSaverItem] {
         var seen = Set<ScreenSaverItem>()
         let filtered = order.filter { seen.insert($0).inserted }
@@ -311,7 +362,8 @@ public struct ScreenSaverSettings: Codable, Sendable, Equatable {
                       isMascotHidden: Bool? = nil, isMascotBright: Bool? = nil, mascotLevel: Double? = nil,
                       background: ScreenSaverBackground? = nil, customBackgroundName: String?? = nil,
                       widgetPositions: [String: WidgetPosition]? = nil,
-                      widgetOrder: [ScreenSaverItem]? = nil) -> Self {
+                      widgetOrder: [ScreenSaverItem]? = nil, title: String? = nil, showsTitle: Bool? = nil,
+                      recentTitles: [String]? = nil, widgetScales: [String: Double]? = nil) -> Self {
         Self(widgets: widgets ?? self.widgets, isDimEnabled: isDimEnabled ?? self.isDimEnabled,
              dimAfterSeconds: dimAfterSeconds ?? self.dimAfterSeconds, dimLevel: dimLevel ?? self.dimLevel,
              fadeSeconds: fadeSeconds ?? self.fadeSeconds, shortcut: shortcut ?? self.shortcut,
@@ -324,13 +376,15 @@ public struct ScreenSaverSettings: Codable, Sendable, Equatable {
              background: background ?? self.background,
              customBackgroundName: customBackgroundName ?? self.customBackgroundName,
              widgetPositions: widgetPositions ?? self.widgetPositions,
-             widgetOrder: widgetOrder ?? self.widgetOrder)
+             widgetOrder: widgetOrder ?? self.widgetOrder,
+             title: title ?? self.title, showsTitle: showsTitle ?? self.showsTitle,
+             recentTitles: recentTitles ?? self.recentTitles, widgetScales: widgetScales ?? self.widgetScales)
     }
 
     private enum CodingKeys: String, CodingKey {
         case widgets, isDimEnabled, dimAfterSeconds, dimLevel, fadeSeconds, shortcut
         case showsSessions, sessionsCorner, pinnedSessionIDs, isClockBright, clockLevel, mascot
         case isMascotHidden, isMascotBright, mascotLevel, background, customBackgroundName
-        case widgetPositions, widgetOrder
+        case widgetPositions, widgetOrder, title, showsTitle, recentTitles, widgetScales
     }
 }
