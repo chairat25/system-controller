@@ -146,7 +146,15 @@ private struct AppSettingsPage: View {
                 SettingToggle(title: "Mascot roams between Macs", detail: "Walks across to a paired Mac",
                               systemImage: "figure.walk", isOn: model.lanSync.settings.isMascotRoamingOn,
                               onChange: { value in model.lanSync.update { $0.withMascotRoaming(value) } })
-                Footnote("Pair Macs in the main window: Settings → Sync.")
+                ForEach(model.lanSync.settings.pairedPeers) { peer in
+                    PairedMacRow(peer: peer, isConnected: model.lanSync.connectedPeerIDs.contains(peer.id),
+                                 setSide: { side in model.lanSync.update { $0.withSide(side, for: peer.id) } },
+                                 unpair: { model.lanSync.unpair(peer.id) })
+                }
+                PairingControls(pairing: model.lanSync.pairing)
+                if let problem = model.lanSync.problem {
+                    Footnote(problem, tone: Theme.warning)
+                }
             }
             PopoverSection("Permissions") {
                 SettingRow("Input Monitoring", detail: "Keyboard and mouse triggers", systemImage: "keyboard") {
