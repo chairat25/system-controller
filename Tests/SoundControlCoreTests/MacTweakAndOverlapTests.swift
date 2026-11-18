@@ -24,7 +24,7 @@ struct MacSoundTweakTests {
 
     @Test("applying keeps the first originals; reverting forgets them; reset keeps them")
     func applyRevert() throws {
-        let applied = AppConfig.default.applyingTweak(.volumeFeedback, originals: [.absent])
+        let applied = AppConfig.playing.applyingTweak(.volumeFeedback, originals: [.absent])
         #expect(applied.isApplied(.volumeFeedback))
         let again = applied.applyingTweak(.volumeFeedback, originals: [.int(0)])
         #expect(again.appliedTweaks[.volumeFeedback] == [.absent])
@@ -36,13 +36,14 @@ struct MacSoundTweakTests {
         #expect(decoded.appliedTweaks == [.volumeFeedback: [.absent], .chargingChime: [.bool(false)]])
     }
 
-    @Test("new switches default on and toggle immutably")
+    @Test("new switches default off and toggle immutably")
     func switches() {
-        let config = AppConfig.default
-        #expect(config.avoidOverlap && config.keepAudioReady)
+        let config = AppConfig.playing
+        #expect(!config.avoidOverlap && !config.keepAudioReady)
+        #expect(config.withAvoidOverlap(true).avoidOverlap)
         #expect(!config.withAvoidOverlap(false).avoidOverlap)
         #expect(!config.withKeepAudioReady(false).keepAudioReady)
-        #expect(config.avoidOverlap)
+        #expect(!config.avoidOverlap)
     }
 }
 
@@ -57,7 +58,7 @@ struct BurstTests {
 
     @Test("a second event inside the burst window is skipped")
     func skipsBurst() {
-        let decision = PlaybackGate.decide(.macWakes, config: .default, now: now, lastPlayed: nil,
+        let decision = PlaybackGate.decide(.macWakes, config: AppConfig.playing.withAvoidOverlap(true), now: now, lastPlayed: nil,
                                            lastEventSound: now.addingTimeInterval(-0.1), calendar: calendar)
         #expect(decision == .skipped(.overlap))
         #expect(SkipReason.overlap.isWorthLogging)
@@ -66,11 +67,11 @@ struct BurstTests {
     @Test("outside the window, with the switch off, or for chatty triggers it plays")
     func allows() {
         let earlier = now.addingTimeInterval(-0.1)
-        #expect(PlaybackGate.decide(.macWakes, config: .default, now: now, lastPlayed: nil,
+        #expect(PlaybackGate.decide(.macWakes, config: AppConfig.playing.withAvoidOverlap(true), now: now, lastPlayed: nil,
                                     lastEventSound: now.addingTimeInterval(-1), calendar: calendar) == .play)
-        #expect(PlaybackGate.decide(.macWakes, config: AppConfig.default.withAvoidOverlap(false), now: now,
+        #expect(PlaybackGate.decide(.macWakes, config: AppConfig.playing.withAvoidOverlap(false), now: now,
                                     lastPlayed: nil, lastEventSound: earlier, calendar: calendar) == .play)
-        let typing = AppConfig.default.updatingTrigger(.keyTyped) { $0.enabled(true) }
+        let typing = AppConfig.playing.updatingTrigger(.keyTyped) { $0.enabled(true) }
         #expect(PlaybackGate.decide(.keyTyped, config: typing, now: now, lastPlayed: nil,
                                     lastEventSound: earlier, calendar: calendar) == .play)
     }
@@ -78,7 +79,7 @@ struct BurstTests {
 
 @Suite("Desired macOS tweaks")
 struct DesiredTweakTests {
-    let base = AppConfig.default.withAllTriggers(enabled: false)
+    let base = AppConfig.playing.withAllTriggers(enabled: false).withReplaceMacSounds(true)
 
     @Test("a sound tweak follows its enabled trigger")
     func followsTrigger() {
@@ -102,11 +103,12 @@ struct DesiredTweakTests {
         let hidden = base.withHideScreenshotThumbnail(true)
         #expect(hidden.desiredTweaks() == [.screenshotThumbnail])
         #expect(hidden.withListening(false).desiredTweaks(appIsRunning: false) == [.screenshotThumbnail])
-        #expect(AppConfig.default.replaceMacSounds && !AppConfig.default.hideScreenshotThumbnail)
+        #expect(!AppConfig.playing.replaceMacSounds && !AppConfig.playing.hideScreenshotThumbnail)
     }
 
-    @Test("defaults replace the chime and interface sounds for recommended triggers")
+    @Test("defaults leave macOS sounds alone until the owner opts in")
     func defaults() {
-        #expect(AppConfig.default.desiredTweaks() == [.chargingChime, .interfaceSounds])
+        #expect(AppConfig.playing.desiredTweaks().isEmpty)
+        #expect(AppConfig.playing.withReplaceMacSounds(true).desiredTweaks() == [.chargingChime, .interfaceSounds])
     }
 }

@@ -36,27 +36,42 @@ struct LANSyncSection: View {
 struct PairedMacRow: View {
     let peer: PairedPeer
     let isConnected: Bool
-    let setSide: (PeerSide) -> Void
+    let setSide: (PeerSide?) -> Void
     let unpair: () -> Void
 
     var body: some View {
         LabeledContent {
-            HStack(spacing: 10) {
-                Badge(text: isConnected ? "Connected" : "Not nearby", color: isConnected ? .green : .secondary)
+            HStack(spacing: 6) {
                 Picker("Side", selection: Binding(get: { peer.side }, set: setSide)) {
-                    ForEach(PeerSide.allCases) { side in Text(side.title).tag(side) }
+                    Text("Left").tag(PeerSide?.some(.left))
+                    Text("Not beside").tag(PeerSide?.none)
+                    Text("Right").tag(PeerSide?.some(.right))
                 }
-                .pickerStyle(.segmented)
                 .labelsHidden()
-                .frame(width: 120)
-                Button("Unpair", role: .destructive, action: unpair)
+                .fixedSize()
+                Menu {
+                    Button("Unpair", role: .destructive, action: unpair)
+                } label: {
+                    Image(systemName: "ellipsis")
+                }
+                .menuIndicator(.hidden)
+                .fixedSize()
             }
         } label: {
             VStack(alignment: .leading, spacing: 2) {
-                Text(peer.name)
-                Text("Sits to the \(peer.side.title.lowercased()) of this Mac").font(.caption).foregroundStyle(.secondary)
+                HStack(spacing: 6) {
+                    Circle().fill(isConnected ? Color.green : Color.secondary).frame(width: 7, height: 7)
+                    Text(peer.name).lineLimit(1)
+                }
+                Text(placement).font(.caption).foregroundStyle(.secondary)
             }
         }
+    }
+
+    private var placement: String {
+        let status = isConnected ? "Connected" : "Not nearby"
+        guard let side = peer.side else { return "\(status) · wallpaper only" }
+        return "\(status) · to the \(side.title.lowercased())"
     }
 }
 

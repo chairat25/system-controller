@@ -62,7 +62,7 @@ struct PresetStepTests {
 struct DimmedPreviewTests {
     @Test("endless idle gives the darkest level, or full light when dimming is off")
     func preview() {
-        let settings = ScreenSaverSettings.default.withDimLevel(0.2)
+        let settings = ScreenSaverSettings.default.withDimEnabled(true).withDimLevel(0.2)
         #expect(abs(settings.brightness(idle: .infinity) - 0.2) < 1e-9)
         #expect(settings.withDimEnabled(false).brightness(idle: .infinity) == 1)
     }

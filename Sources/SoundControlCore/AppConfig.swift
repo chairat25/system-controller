@@ -141,16 +141,16 @@ public struct AppConfig: Codable, Sendable, Equatable {
 
     public static var `default`: AppConfig {
         AppConfig(
-            version: currentVersion, isListening: true, masterVolume: 0.7, activePack: .builtIn(.crystal),
+            version: currentVersion, isListening: false, masterVolume: 0.7, activePack: .builtIn(.crystal),
             customPacks: [], triggers: [:], userSounds: [], quietHours: .default,
             batteryLowPercent: 20, batteryCriticalPercent: 10, idleMinutes: 5
-        ).withRecommendedEnabled()
+        )
     }
 
     public init(version: Int, isListening: Bool, masterVolume: Double, activePack: PackSelection,
                 customPacks: [CustomPack], triggers: [TriggerID: TriggerSetting], userSounds: [UserSound],
                 quietHours: QuietHours, batteryLowPercent: Int, batteryCriticalPercent: Int, idleMinutes: Int,
-                avoidOverlap: Bool = true, keepAudioReady: Bool = true, replaceMacSounds: Bool = true,
+                avoidOverlap: Bool = false, keepAudioReady: Bool = false, replaceMacSounds: Bool = false,
                 hideScreenshotThumbnail: Bool = false, appliedTweaks: [MacSoundTweak: [PrefValue]] = [:]) {
         self.version = version
         self.isListening = isListening

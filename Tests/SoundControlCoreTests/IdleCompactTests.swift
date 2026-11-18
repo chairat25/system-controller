@@ -4,10 +4,10 @@ import Testing
 
 @Suite("Idle compact settings")
 struct IdleCompactTests {
-    @Test("defaults are enabled at 15 minutes")
+    @Test("defaults are off at 15 minutes")
     func defaults() {
         let settings = IdleCompactSettings.default
-        #expect(settings.isEnabled)
+        #expect(!settings.isEnabled)
         #expect(settings.idleMinutes == 15)
         #expect(settings.idleSeconds == 900)
     }

@@ -42,6 +42,12 @@ public struct RoamingWalker: Sendable, Equatable {
                     timeLeft: minimumPause + pause * pauseRange, randomState: state)
     }
 
+    /// An object that came down on the floor after a throw: it rests where it landed, then strolls on.
+    public static func landed(id: String, kind: RoamingKind = .mascot, x: Double, facesRight: Bool, seed: UInt64) -> Self {
+        Self(id: id, kind: kind, x: x, yFraction: 1, facesRight: facesRight, isWalking: false, phase: .inside,
+             steps: 0, elapsed: 0, timeLeft: minimumPause, randomState: seed)
+    }
+
     /// An object that arrived from the next screen: it walks in from the edge it was handed over at.
     public static func arriving(_ object: RoamingObject, maxX: Double, size: Double, seed: UInt64) -> Self {
         let isFromLeft = object.entryEdge == .left

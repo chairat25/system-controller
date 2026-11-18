@@ -2,7 +2,7 @@ import Foundation
 
 /// Settings for the whole app, not one module. Stored as JSON next to `config.json`.
 public struct AppSettings: Codable, Sendable, Equatable {
-    public static let `default` = AppSettings(popupShortcut: nil, autoUpdateEnabled: true)
+    public static let `default` = AppSettings(popupShortcut: nil, autoUpdateEnabled: false)
 
     /// Global shortcut that opens the menu-bar popup on the Control tab, nil when none is set.
     public let popupShortcut: KeyShortcut?
@@ -10,7 +10,7 @@ public struct AppSettings: Codable, Sendable, Equatable {
     /// Automatically check GitHub Releases and install updates in the background.
     public let autoUpdateEnabled: Bool
 
-    public init(popupShortcut: KeyShortcut?, autoUpdateEnabled: Bool = true) {
+    public init(popupShortcut: KeyShortcut?, autoUpdateEnabled: Bool = false) {
         self.popupShortcut = popupShortcut
         self.autoUpdateEnabled = autoUpdateEnabled
     }
@@ -19,7 +19,7 @@ public struct AppSettings: Codable, Sendable, Equatable {
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         let shortcut = try? container.decodeIfPresent(KeyShortcut.self, forKey: .popupShortcut)
-        let autoUpdate = (try? container.decodeIfPresent(Bool.self, forKey: .autoUpdateEnabled)) ?? true
+        let autoUpdate = (try? container.decodeIfPresent(Bool.self, forKey: .autoUpdateEnabled)) ?? false
         self.init(popupShortcut: shortcut, autoUpdateEnabled: autoUpdate)
     }
 

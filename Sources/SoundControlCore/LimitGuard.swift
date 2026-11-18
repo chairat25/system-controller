@@ -33,7 +33,7 @@ public struct ClaudeQuota: Sendable, Equatable {
 public struct LimitGuardSettings: Codable, Sendable, Equatable {
     public static let minimumPercent = 1
     public static let maximumPercent = 50
-    public static let `default` = LimitGuardSettings(isEnabled: true, thresholdPercent: 5)
+    public static let `default` = LimitGuardSettings(isEnabled: false, thresholdPercent: 5)
 
     public let isEnabled: Bool
     /// Acts when this much of the window or less is left.

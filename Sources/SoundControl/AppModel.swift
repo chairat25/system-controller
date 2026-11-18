@@ -95,7 +95,7 @@ final class AppModel {
                     self?.updater.notifyUnlocked()
                 }
                 self.updater.start(
-                    isAutoUpdateEnabled: { [weak self] in self?.appSettings.autoUpdateEnabled ?? true },
+                    isAutoUpdateEnabled: { [weak self] in self?.appSettings.autoUpdateEnabled ?? false },
                     isLocked: { [weak self] in self?.keyboardLock.isLocked ?? false }
                 )
                 self.lanSync.start(hooks: LANSyncService.Hooks(
