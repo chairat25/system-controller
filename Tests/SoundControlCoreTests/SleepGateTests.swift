@@ -13,21 +13,21 @@ struct SleepGateTests {
 
     @Test("plays normally while the Mac is awake")
     func awake() {
-        #expect(PlaybackGate.decide(.chargerConnected, config: .default, now: now, lastPlayed: nil,
+        #expect(PlaybackGate.decide(.chargerConnected, config: .playing, now: now, lastPlayed: nil,
                                     asleepSince: nil, calendar: calendar) == .play)
     }
 
     @Test("the sleep sound itself still plays right after the Mac starts going to sleep")
     func graceAfterSleep() {
         let justNow = now.addingTimeInterval(-1)
-        #expect(PlaybackGate.decide(.macSleeps, config: .default, now: now, lastPlayed: nil,
+        #expect(PlaybackGate.decide(.macSleeps, config: .playing, now: now, lastPlayed: nil,
                                     asleepSince: justNow, calendar: calendar) == .play)
     }
 
     @Test("events during sleep or a dark wake are skipped")
     func skipsWhileAsleep() {
         let earlier = now.addingTimeInterval(-(PlaybackGate.sleepGrace + 60))
-        #expect(PlaybackGate.decide(.chargerConnected, config: .default, now: now, lastPlayed: nil,
+        #expect(PlaybackGate.decide(.chargerConnected, config: .playing, now: now, lastPlayed: nil,
                                     asleepSince: earlier, calendar: calendar) == .skipped(.asleep))
         #expect(SkipReason.asleep.isWorthLogging)
     }

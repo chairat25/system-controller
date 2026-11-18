@@ -70,6 +70,7 @@ final class LANSyncService {
         isStarted = true
         self.hooks = hooks
         mascots.mascot = hooks.mascot
+        mascots.homeID = deviceID
         wallpaper = WallpaperSyncer(link: WallpaperSyncer.Link(
             peers: { [weak self] in self?.connectedPeers(wanting: \.wallpaper) ?? [] },
             send: { [weak self] id, message in self?.connections[id]?.send(message) },
@@ -127,8 +128,7 @@ final class LANSyncService {
             problem = "Could not store the pairing key: \(error.localizedDescription)"
             return
         }
-        let side: PeerSide = settings.peer(on: .right) == nil ? .right : .left
-        update { $0.adding(PairedPeer(id: result.peerID, name: result.peerName, side: side)) }
+        update { $0.adding(PairedPeer(id: result.peerID, name: result.peerName, side: $0.freeSide)) }
     }
 
     // MARK: - Starting and stopping
@@ -282,6 +282,7 @@ final class LANSyncService {
     private func dropConnection(_ id: String) {
         connections[id] = nil
         peerWants[id] = nil
+        mascots.peerLeft(id)
         wallpaper?.peerDisconnected(id)
         refreshConnected()
     }

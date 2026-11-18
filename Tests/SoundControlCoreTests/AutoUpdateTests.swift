@@ -79,18 +79,18 @@ struct AutoUpdateTests {
         #expect(ReleaseAssetInfo.expectedSHA256(for: "Other.zip", in: content) == nil)
     }
 
-    @Test("AppSettings enables auto-update by default and decodes legacy JSON safely")
+    @Test("AppSettings leaves auto-update off by default and decodes legacy JSON safely")
     func appSettingsAutoUpdate() throws {
-        #expect(AppSettings.default.autoUpdateEnabled == true)
+        #expect(AppSettings.default.autoUpdateEnabled == false)
         let disabled = AppSettings.default.withAutoUpdate(false)
         #expect(disabled.autoUpdateEnabled == false)
 
         let decodedDisabled = try JSONDecoder().decode(AppSettings.self, from: JSONEncoder().encode(disabled))
         #expect(decodedDisabled.autoUpdateEnabled == false)
 
-        // Existing config JSON without `autoUpdateEnabled` must still decode with true as default.
+        // Existing config JSON without `autoUpdateEnabled` must still decode with false as default.
         let legacy = try JSONDecoder().decode(AppSettings.self, from: Data(#"{"popupShortcut":null}"#.utf8))
-        #expect(legacy.autoUpdateEnabled == true)
+        #expect(legacy.autoUpdateEnabled == false)
         #expect(legacy == .default)
     }
 }

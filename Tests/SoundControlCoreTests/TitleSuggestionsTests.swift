@@ -45,6 +45,6 @@ struct TitleSuggestionsTests {
         let back = try JSONDecoder().decode(ScreenSaverSettings.self, from: JSONEncoder().encode(s))
         #expect(back == s)
         let old = try JSONDecoder().decode(ScreenSaverSettings.self, from: Data("{}".utf8))
-        #expect(old.title == ScreenSaverSettings.defaultTitle && old.showsTitle)
+        #expect(old.title == ScreenSaverSettings.defaultTitle && !old.showsTitle)
     }
 }

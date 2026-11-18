@@ -81,7 +81,7 @@ public struct ScreenSaverSettings: Codable, Sendable, Equatable {
     public static let maximumRecentTitles = 8
     public static let scaleRange: ClosedRange<Double> = 0.5...2
     public static let `default` = ScreenSaverSettings(widgets: [.clock, .calendar, .claudeUsage],
-                                                      isDimEnabled: true, dimAfterSeconds: 60,
+                                                      isDimEnabled: false, dimAfterSeconds: 60,
                                                       dimLevel: 0, fadeSeconds: 120)
 
     public let widgets: [ScreenSaverWidget]
@@ -138,7 +138,7 @@ public struct ScreenSaverSettings: Codable, Sendable, Equatable {
 
     public init(widgets: [ScreenSaverWidget], isDimEnabled: Bool, dimAfterSeconds: Int,
                 dimLevel: Double, fadeSeconds: Int, shortcut: KeyShortcut? = nil,
-                showsSessions: Bool = true, sessionsCorner: ScreenSaverCorner = .topLeft,
+                showsSessions: Bool = false, sessionsCorner: ScreenSaverCorner = .topLeft,
                 pinnedSessionIDs: [String] = [],
                 isClockBright: Bool = false, clockLevel: Double = 1, mascot: Mascot = .cat,
                 isMascotHidden: Bool = false,
@@ -146,7 +146,7 @@ public struct ScreenSaverSettings: Codable, Sendable, Equatable {
                 background: ScreenSaverBackground = .pitchBlack, customBackgroundName: String? = nil,
                 widgetPositions: [String: WidgetPosition] = [:],
                 widgetOrder: [ScreenSaverItem] = ScreenSaverItem.allCases,
-                title: String = Self.defaultTitle, showsTitle: Bool = true, recentTitles: [String] = [],
+                title: String = Self.defaultTitle, showsTitle: Bool = false, recentTitles: [String] = [],
                 widgetScales: [String: Double] = [:]) {
         // Rebuilt from `allCases` so the order is fixed and a widget can never appear twice.
         self.widgets = ScreenSaverWidget.allCases.filter(widgets.contains)
@@ -213,7 +213,7 @@ public struct ScreenSaverSettings: Codable, Sendable, Equatable {
             widgetPositions: (try? container.decodeIfPresent([String: WidgetPosition].self, forKey: .widgetPositions)) ?? [:],
             widgetOrder: (try? container.decodeIfPresent([ScreenSaverItem].self, forKey: .widgetOrder)) ?? ScreenSaverItem.allCases,
             title: (try? container.decodeIfPresent(String.self, forKey: .title)) ?? nil ?? Self.defaultTitle,
-            showsTitle: (try? container.decodeIfPresent(Bool.self, forKey: .showsTitle)) ?? nil ?? true,
+            showsTitle: (try? container.decodeIfPresent(Bool.self, forKey: .showsTitle)) ?? nil ?? false,
             recentTitles: (try? container.decodeIfPresent([String].self, forKey: .recentTitles)) ?? nil ?? [],
             widgetScales: (try? container.decodeIfPresent([String: Double].self, forKey: .widgetScales)) ?? nil ?? [:])
     }

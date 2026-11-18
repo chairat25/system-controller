@@ -277,3 +277,74 @@ struct RoamingTests {
         #expect(walker.phase == .inside)
     }
 }
+
+@Suite("Mascot throw and placement")
+struct MascotThrowTests {
+    private func fly(_ start: MascotFling, canExit: (PeerSide) -> Bool) -> MascotFling.Outcome {
+        var fling = start
+        for _ in 0..<2000 {
+            let outcome = fling.advanced(by: 1.0 / 24, maxX: 800, maxLift: 500, size: 64, canExit: canExit)
+            guard case let .flying(next) = outcome else { return outcome }
+            #expect(next.lift >= 0 && next.lift <= 500)
+            fling = next
+        }
+        return .flying(fling)
+    }
+
+    @Test("a throw with no neighbour bounces and lands inside the screen")
+    func landsInside() {
+        let outcome = fly(MascotFling(x: 400, lift: 200, vx: 3000, vy: 800)) { _ in false }
+        guard case let .landed(x, _) = outcome else { Issue.record("did not land"); return }
+        #expect((0...800).contains(x))
+    }
+
+    @Test("a throw toward a neighbour flies off that edge with its speed")
+    func fliesOff() {
+        let outcome = fly(MascotFling(x: 600, lift: 100, vx: 2000, vy: 300)) { $0 == .right }
+        guard case let .gone(side, flight) = outcome else { Issue.record("did not leave"); return }
+        #expect(side == .right)
+        #expect(flight.vx > 0)
+    }
+
+    @Test("a flight arriving from the left starts outside and comes in")
+    func arrivingFlight() {
+        let start = MascotFling.arriving(RoamingFlight(liftFraction: 0.5, vx: 1500, vy: 0), entry: .left,
+                                         maxX: 800, maxLift: 500, size: 64)
+        #expect(start.x == -64)
+        #expect(start.lift == 250)
+        let outcome = fly(start) { $0 == .left }
+        guard case let .landed(x, _) = outcome else { Issue.record("did not land"); return }
+        #expect(x > 0)
+    }
+
+    @Test("a slow sideways flight entering low still makes it onto the screen")
+    func slowEntry() {
+        let start = MascotFling.arriving(RoamingFlight(liftFraction: 0, vx: 300, vy: 0), entry: .left,
+                                         maxX: 800, maxLift: 500, size: 64)
+        guard case .landed = fly(start, canExit: { _ in false }) else { Issue.record("stuck outside"); return }
+    }
+
+    @Test("handoffs carry home, look and flight, and older ones without them still decode")
+    func handoffFields() throws {
+        let object = RoamingObject(id: "m", kind: .mascot, yFraction: 1, direction: .right, state: .walking,
+                                   home: "MacA", look: .panda, flight: RoamingFlight(liftFraction: 0.2, vx: 10, vy: 5))
+        #expect(try SyncMessage.decode(SyncMessage.roamingHandoff(object).encoded()) == .roamingHandoff(object))
+        let old = #"{"id":"m","kind":"mascot","yFraction":1,"direction":"left","state":"walking"}"#
+        let decoded = try JSONDecoder().decode(RoamingObject.self, from: Data(old.utf8))
+        #expect(decoded.home == nil && decoded.look == nil && decoded.flight == nil)
+        #expect(RoamingFlight(liftFraction: 3, vx: .infinity, vy: -1e9) == RoamingFlight(liftFraction: 1, vx: 0, vy: -6000))
+    }
+
+    @Test("one Mac per edge, a Mac can be not beside, and that survives a round trip")
+    func placement() throws {
+        let settings = LANSyncSettings(isWallpaperSyncOn: false, isMascotRoamingOn: true, pairedPeers: [
+            PairedPeer(id: "B", name: "B", side: .right), PairedPeer(id: "C", name: "C", side: nil),
+        ])
+        let moved = settings.withSide(.right, for: "C")
+        #expect(moved.peer(on: .right)?.id == "C")
+        #expect(moved.peer(id: "B")?.side == nil)
+        #expect(moved.freeSide == .left)
+        let data = try JSONEncoder().encode(moved)
+        #expect(try JSONDecoder().decode(LANSyncSettings.self, from: data) == moved)
+    }
+}

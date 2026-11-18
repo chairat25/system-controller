@@ -231,7 +231,7 @@ struct ClockAndPinTests {
         let decoded = try JSONDecoder().decode(ScreenSaverSettings.self, from: JSONEncoder().encode(custom))
         #expect(decoded == custom)
         let old = try JSONDecoder().decode(ScreenSaverSettings.self, from: Data(#"{"fadeSeconds":5}"#.utf8))
-        #expect(old.showsSessions)
+        #expect(!old.showsSessions)
         #expect(!old.isClockBright)
         #expect(old.clockLevel == 1)
         #expect(old.pinnedSessionIDs.isEmpty)

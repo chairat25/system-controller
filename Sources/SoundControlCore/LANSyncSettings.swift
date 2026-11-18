@@ -15,16 +15,21 @@ public enum PeerSide: String, Codable, Sendable, CaseIterable, Identifiable {
     }
 }
 
-/// A Mac this one has paired with. The shared key lives in the Keychain, never here.
+/// A Mac this one has paired with. The shared key lives in a key file, never here.
 public struct PairedPeer: Codable, Sendable, Equatable, Identifiable {
+    /// Written in place of a side for a Mac that is not beside this one (it shares wallpapers only).
+    static let notBeside = "none"
+
     public static let maximumNameLength = 60
     public static let maximumIDLength = 64
 
     public let id: String
     public let name: String
-    public let side: PeerSide
+    /// The edge it sits beyond, or nil when it is not next to this Mac. With three Macs in a row the outer two
+    /// are not beside each other, so a mascot reaching the free edge turns back.
+    public let side: PeerSide?
 
-    public init(id: String, name: String, side: PeerSide) {
+    public init(id: String, name: String, side: PeerSide?) {
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
         self.id = id
         self.name = trimmed.isEmpty ? "Mac" : String(trimmed.prefix(Self.maximumNameLength))
@@ -44,9 +49,17 @@ public struct PairedPeer: Codable, Sendable, Equatable, Identifiable {
         guard Self.isValidID(id) else {
             throw DecodingError.dataCorruptedError(forKey: .id, in: container, debugDescription: "Invalid peer id")
         }
+        let rawSide = try? container.decode(String.self, forKey: .side)
         self.init(id: id,
                   name: (try? container.decode(String.self, forKey: .name)) ?? "Mac",
-                  side: (try? container.decode(PeerSide.self, forKey: .side)) ?? .right)
+                  side: rawSide == Self.notBeside ? nil : rawSide.flatMap(PeerSide.init(rawValue:)) ?? .right)
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(id, forKey: .id)
+        try container.encode(name, forKey: .name)
+        try container.encode(side?.rawValue ?? Self.notBeside, forKey: .side)
     }
 
     private enum CodingKeys: String, CodingKey { case id, name, side }
@@ -102,8 +115,19 @@ public struct LANSyncSettings: Codable, Sendable, Equatable {
         copy(pairedPeers: pairedPeers.filter { $0.id != id })
     }
 
-    public func withSide(_ side: PeerSide, for id: String) -> Self {
-        copy(pairedPeers: pairedPeers.map { $0.id == id ? PairedPeer(id: $0.id, name: $0.name, side: side) : $0 })
+    /// Puts a Mac beyond an edge, or nowhere. Only one Mac sits beyond each edge: the one that held it before
+    /// is moved off it.
+    public func withSide(_ side: PeerSide?, for id: String) -> Self {
+        copy(pairedPeers: pairedPeers.map { peer in
+            if peer.id == id { return PairedPeer(id: peer.id, name: peer.name, side: side) }
+            if side != nil, peer.side == side { return PairedPeer(id: peer.id, name: peer.name, side: nil) }
+            return peer
+        })
+    }
+
+    /// The side a newly paired Mac takes: a free edge, right first, else none.
+    public var freeSide: PeerSide? {
+        [PeerSide.right, .left].first { peer(on: $0) == nil }
     }
 
     /// One place that lists every field, so each `with` method changes just its own.

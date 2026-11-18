@@ -4,17 +4,18 @@ import Testing
 
 @Suite("AppConfig")
 struct AppConfigTests {
-    @Test("defaults enable exactly the recommended triggers")
+    @Test("defaults are silent until the owner switches sound on")
     func defaults() {
         let config = AppConfig.default
-        #expect(config.enabledTriggers == TriggerCatalog.recommended)
-        #expect(config.isListening)
+        #expect(config.enabledTriggers.isEmpty)
+        #expect(!config.isListening)
+        #expect(AppConfig.playing.enabledTriggers == TriggerCatalog.recommended)
         #expect(config.activePack == .builtIn(.crystal))
     }
 
     @Test("updates return a new value and leave the original untouched")
     func immutableUpdates() {
-        let original = AppConfig.default
+        let original = AppConfig.playing
         let changed = original.updatingTrigger(.muted) { $0.enabled(true).withVolume(0.4) }
         #expect(!original.isEnabled(.muted))
         #expect(changed.isEnabled(.muted))
@@ -25,7 +26,7 @@ struct AppConfigTests {
 
     @Test("values are clamped into range")
     func clamping() {
-        let config = AppConfig.default.withMasterVolume(3).withIdleMinutes(0)
+        let config = AppConfig.playing.withMasterVolume(3).withIdleMinutes(0)
         #expect(config.masterVolume == 1)
         #expect(config.idleMinutes == 1)
         #expect(TriggerSetting.default.withVolume(-2).volume == 0)
@@ -35,10 +36,10 @@ struct AppConfigTests {
 
     @Test("critical battery threshold always stays below low")
     func batteryThresholds() {
-        let config = AppConfig.default.withBatteryThresholds(low: 15, critical: 40)
+        let config = AppConfig.playing.withBatteryThresholds(low: 15, critical: 40)
         #expect(config.batteryLowPercent == 15)
         #expect(config.batteryCriticalPercent == 14)
-        let lowest = AppConfig.default.withBatteryThresholds(low: 1, critical: 1)
+        let lowest = AppConfig.playing.withBatteryThresholds(low: 1, critical: 1)
         #expect(lowest.batteryLowPercent == 2 && lowest.batteryCriticalPercent == 1)
         let clamped = AppConfig(version: 1, isListening: true, masterVolume: 1, activePack: .builtIn(.crystal),
                            customPacks: [], triggers: [:], userSounds: [], quietHours: .default,
@@ -49,9 +50,9 @@ struct AppConfigTests {
     @Test("reset keeps the imported sound library")
     func resetKeepsSounds() {
         let sound = UserSound(name: "Quack", fileName: "x.wav", duration: 1)
-        let reset = AppConfig.default.addingUserSound(sound).withMasterVolume(0.1).reset()
+        let reset = AppConfig.playing.addingUserSound(sound).withMasterVolume(0.1).reset()
         #expect(reset.userSounds == [sound])
-        #expect(reset.masterVolume == AppConfig.default.masterVolume)
+        #expect(reset.masterVolume == AppConfig.playing.masterVolume)
     }
 
     @Test("unknown triggers, sounds and packs are dropped instead of failing")
@@ -84,7 +85,7 @@ struct AppConfigTests {
 
     @Test("bulk enable and disable by category")
     func bulk() {
-        let allOn = AppConfig.default.withAllTriggers(enabled: true)
+        let allOn = AppConfig.playing.withAllTriggers(enabled: true)
         #expect(allOn.enabledTriggers == Set(TriggerID.allCases))
         let powerOff = allOn.withAllTriggers(enabled: false, in: .power)
         #expect(TriggerCatalog.triggers(in: .power).allSatisfy { !powerOff.isEnabled($0.id) })
@@ -103,18 +104,18 @@ struct AppConfigTests {
     @Test("removing a custom pack that is active falls back to Crystal")
     func removeActivePack() {
         let pack = CustomPack(name: "GM", base: .arcade)
-        let config = AppConfig.default.addingCustomPack(pack).selectingPack(.custom(pack.id))
+        let config = AppConfig.playing.addingCustomPack(pack).selectingPack(.custom(pack.id))
         #expect(config.activePack == .custom(pack.id))
         let removed = config.removingCustomPack(pack.id)
         #expect(removed.customPacks.isEmpty)
         #expect(removed.activePack == .builtIn(.crystal))
-        #expect(AppConfig.default.selectingPack(.custom(UUID())).activePack == .builtIn(.crystal))
+        #expect(AppConfig.playing.selectingPack(.custom(UUID())).activePack == .builtIn(.crystal))
     }
 
     @Test("custom packs can be updated in place by id")
     func updatePack() {
         let pack = CustomPack(name: "GM", base: .arcade)
-        let config = AppConfig.default.addingCustomPack(pack).updatingCustomPack(pack.id) { $0.renamed("Boss") }
+        let config = AppConfig.playing.addingCustomPack(pack).updatingCustomPack(pack.id) { $0.renamed("Boss") }
         #expect(config.customPack(id: pack.id)?.name == "Boss")
         #expect(config.addingCustomPack(pack).customPacks.count == 1)
     }
@@ -125,7 +126,7 @@ struct AppConfigTests {
         let ref = SoundRef.user(id: sound.id)
         let pack = CustomPack(name: "GM", base: .crystal).overriding(.muted, with: [ref, .system(name: "Pop")])
             .overriding(.unmuted, with: [ref])
-        let config = AppConfig.default
+        let config = AppConfig.playing
             .addingUserSound(sound)
             .addingCustomPack(pack)
             .updatingTrigger(.macWakes) { $0.withSounds([ref]) }
@@ -142,7 +143,7 @@ struct AppConfigTests {
     @Test("JSON round-trip preserves the whole config")
     func jsonRoundTrip() throws {
         let pack = CustomPack(name: "GM", base: .cosmic).overriding(.keyTyped, with: [.system(name: "Tink")])
-        let config = AppConfig.default
+        let config = AppConfig.playing
             .addingCustomPack(pack)
             .selectingPack(.custom(pack.id))
             .withQuietHours(QuietHours(isEnabled: true, startMinute: 60, endMinute: 120))
@@ -157,8 +158,8 @@ struct AppConfigTests {
     func tolerantDecoding() throws {
         let decoded = try JSONDecoder.soundControl.decode(AppConfig.self, from: Data(#"{"masterVolume":0.2}"#.utf8))
         #expect(decoded.masterVolume == 0.2)
-        #expect(decoded.enabledTriggers == TriggerCatalog.recommended)
-        #expect(decoded.idleMinutes == AppConfig.default.idleMinutes)
+        #expect(decoded.enabledTriggers.isEmpty)
+        #expect(decoded.idleMinutes == AppConfig.playing.idleMinutes)
     }
 }
 
@@ -166,14 +167,14 @@ struct AppConfigTests {
 struct SoundResolverTests {
     @Test("follows the active built-in pack by default")
     func followsPack() {
-        let config = AppConfig.default.selectingPack(.builtIn(.arcade))
+        let config = AppConfig.playing.selectingPack(.builtIn(.arcade))
         #expect(SoundResolver.candidates(for: .chargerConnected, in: config) == BuiltInPack.arcade.sounds(for: .rise))
         #expect(SoundResolver.sourceDescription(for: .chargerConnected, in: config) == "Arcade · 2 takes")
     }
 
     @Test("custom trigger sounds beat the pack")
     func customWins() {
-        let config = AppConfig.default.updatingTrigger(.chargerConnected) { $0.withSounds([.system(name: "Hero")]) }
+        let config = AppConfig.playing.updatingTrigger(.chargerConnected) { $0.withSounds([.system(name: "Hero")]) }
         #expect(SoundResolver.candidates(for: .chargerConnected, in: config) == [.system(name: "Hero")])
         #expect(SoundResolver.sourceDescription(for: .chargerConnected, in: config) == "Custom")
     }
@@ -181,7 +182,7 @@ struct SoundResolverTests {
     @Test("custom pack override, then its base pack")
     func customPack() {
         let pack = CustomPack(name: "GM", base: .marimba).overriding(.muted, with: [.system(name: "Frog")])
-        let config = AppConfig.default.addingCustomPack(pack).selectingPack(.custom(pack.id))
+        let config = AppConfig.playing.addingCustomPack(pack).selectingPack(.custom(pack.id))
         #expect(SoundResolver.candidates(for: .muted, in: config) == [.system(name: "Frog")])
         #expect(SoundResolver.candidates(for: .unmuted, in: config) == BuiltInPack.marimba.sounds(for: .doubleUp))
         #expect(SoundResolver.packName(.custom(pack.id), in: config) == "GM")
@@ -189,7 +190,7 @@ struct SoundResolverTests {
 
     @Test("a dangling custom pack selection falls back to Crystal sounds")
     func danglingPack() {
-        var config = AppConfig.default
+        var config = AppConfig.playing
         config.activePack = .custom(UUID())
         #expect(SoundResolver.candidates(for: .macWakes, in: config) == BuiltInPack.crystal.sounds(for: .ascend))
         #expect(SoundResolver.packName(config.activePack, in: config) == "Missing pack")
@@ -197,14 +198,14 @@ struct SoundResolverTests {
 
     @Test("deleted user sounds are not candidates")
     func dropsMissingUserSounds() {
-        let config = AppConfig.default.updatingTrigger(.muted) { $0.withSounds([.user(id: UUID())]) }
+        let config = AppConfig.playing.updatingTrigger(.muted) { $0.withSounds([.user(id: UUID())]) }
         #expect(SoundResolver.candidates(for: .muted, in: config).isEmpty)
     }
 
     @Test("display names describe every kind of sound")
     func displayNames() {
         let sound = UserSound(name: "Quack", fileName: "x.wav", duration: 1)
-        let config = AppConfig.default.addingUserSound(sound)
+        let config = AppConfig.playing.addingUserSound(sound)
         #expect(SoundResolver.displayName(of: .synth(pack: .crystal, motif: .rise, take: 0), in: config) == "Crystal Rise")
         #expect(SoundResolver.displayName(of: .synth(pack: .crystal, motif: .rise, take: 1), in: config) == "Crystal Rise (take 2)")
         #expect(SoundResolver.displayName(of: .system(name: "Pop"), in: config) == "Pop")
@@ -243,12 +244,12 @@ struct PlaybackGateTests {
 
     @Test("plays an enabled trigger")
     func plays() {
-        #expect(PlaybackGate.decide(.chargerConnected, config: .default, now: noon, lastPlayed: nil, calendar: calendar) == .play)
+        #expect(PlaybackGate.decide(.chargerConnected, config: .playing, now: noon, lastPlayed: nil, calendar: calendar) == .play)
     }
 
     @Test("skip reasons in priority order")
     func skips() {
-        let config = AppConfig.default
+        let config = AppConfig.playing
         #expect(PlaybackGate.decide(.chargerConnected, config: config.withListening(false), now: noon, lastPlayed: nil, calendar: calendar) == .skipped(.notListening))
         #expect(PlaybackGate.decide(.muted, config: config, now: noon, lastPlayed: nil, calendar: calendar) == .skipped(.triggerOff))
         let quiet = config.withQuietHours(QuietHours(isEnabled: true, startMinute: 11 * 60, endMinute: 13 * 60))
@@ -260,12 +261,12 @@ struct PlaybackGateTests {
 
     @Test("cooldown expires")
     func cooldownExpires() {
-        #expect(PlaybackGate.decide(.chargerConnected, config: .default, now: noon, lastPlayed: noon.addingTimeInterval(-2), calendar: calendar) == .play)
+        #expect(PlaybackGate.decide(.chargerConnected, config: .playing, now: noon, lastPlayed: noon.addingTimeInterval(-2), calendar: calendar) == .play)
     }
 
     @Test("gain multiplies master and trigger volume")
     func gain() {
-        let config = AppConfig.default.withMasterVolume(0.5).updatingTrigger(.muted) { $0.withVolume(0.5) }
+        let config = AppConfig.playing.withMasterVolume(0.5).updatingTrigger(.muted) { $0.withVolume(0.5) }
         #expect(PlaybackGate.gain(for: .muted, config: config) == 0.25)
     }
 

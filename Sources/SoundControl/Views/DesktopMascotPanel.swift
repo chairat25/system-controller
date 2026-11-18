@@ -37,9 +37,14 @@ private struct DesktopMascotArt: View {
     }
 }
 
-/// A transparent, borderless window that floats over everything and lets every click through.
-/// It is only as big as the mascot, so it costs almost no memory; the controller moves it as the mascot walks.
+/// A transparent, borderless window that floats over everything. It is only as big as the mascot, so it costs
+/// almost no memory and only the mascot itself takes clicks: press to pick it up, drag, and let go to throw it.
+/// The controller moves it as the mascot walks or flies.
 final class DesktopMascotPanel: NSPanel {
+    var onGrab: (NSPoint) -> Void = { _ in }
+    var onDrag: (NSPoint) -> Void = { _ in }
+    var onRelease: (NSPoint) -> Void = { _ in }
+
     @MainActor
     init(sprite: DesktopMascotSprite) {
         let side = MascotStroll.size
@@ -48,16 +53,40 @@ final class DesktopMascotPanel: NSPanel {
         isOpaque = false
         backgroundColor = .clear
         hasShadow = false
-        ignoresMouseEvents = true
+        ignoresMouseEvents = false
         level = .floating
         isReleasedWhenClosed = false
         hidesOnDeactivate = false
         collectionBehavior = [.canJoinAllSpaces, .stationary, .fullScreenAuxiliary, .ignoresCycle]
+        let grab = MascotGrabView(frame: NSRect(x: 0, y: 0, width: side, height: side))
         let host = NSHostingView(rootView: DesktopMascotArt(sprite: sprite))
-        host.frame = NSRect(x: 0, y: 0, width: side, height: side)
-        contentView = host
+        host.frame = grab.bounds
+        host.autoresizingMask = [.width, .height]
+        grab.addSubview(host)
+        grab.panel = self
+        contentView = grab
     }
 
     override var canBecomeKey: Bool { false }
     override var canBecomeMain: Bool { false }
+}
+
+/// Takes the mouse for the whole mascot, above the drawing, and reports it in screen points.
+private final class MascotGrabView: NSView {
+    weak var panel: DesktopMascotPanel?
+
+    override func hitTest(_ point: NSPoint) -> NSView? { frame.contains(point) ? self : nil }
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+
+    override func mouseDown(with event: NSEvent) {
+        NSCursor.closedHand.push()
+        panel?.onGrab(NSEvent.mouseLocation)
+    }
+
+    override func mouseDragged(with event: NSEvent) { panel?.onDrag(NSEvent.mouseLocation) }
+
+    override func mouseUp(with event: NSEvent) {
+        NSCursor.pop()
+        panel?.onRelease(NSEvent.mouseLocation)
+    }
 }

@@ -6,7 +6,7 @@ public struct IdleCompactSettings: Codable, Sendable, Equatable {
     public static let defaultMinutes = 15
     public static let minimumMinutes = 1
     public static let maximumMinutes = 120
-    public static let `default` = IdleCompactSettings(isEnabled: true, idleMinutes: defaultMinutes)
+    public static let `default` = IdleCompactSettings(isEnabled: false, idleMinutes: defaultMinutes)
 
     public var isEnabled: Bool
     public private(set) var idleMinutes: Int
@@ -21,7 +21,7 @@ public struct IdleCompactSettings: Codable, Sendable, Equatable {
     /// Missing or out-of-range fields fall back to defaults instead of failing the whole file.
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        let isEnabled = try container.decodeIfPresent(Bool.self, forKey: .isEnabled) ?? true
+        let isEnabled = try container.decodeIfPresent(Bool.self, forKey: .isEnabled) ?? false
         let minutes = try container.decodeIfPresent(Int.self, forKey: .idleMinutes) ?? Self.defaultMinutes
         self.init(isEnabled: isEnabled, idleMinutes: minutes)
     }

@@ -1,35 +1,58 @@
 import AppKit
 import SoundControlCore
 
-/// Runs the desktop mascots on this Mac: spawns one, walks it, and passes it to a paired Mac when it walks off an
-/// edge that has a neighbour. Panels and timers exist only between `start` and `stop`.
+/// Runs the desktop mascots on this Mac: keeps this Mac's own mascot alive, walks every mascot on screen, lets the
+/// owner pick one up and throw it, and passes a mascot to a paired Mac when it walks or flies off an edge with a
+/// neighbour. Visitors keep the look of their home Mac. Panels and timers exist only between `start` and `stop`.
 @MainActor
 final class DesktopMascotController {
     private static let frameInterval: TimeInterval = 1.0 / 24
     private static let idleInterval: TimeInterval = 5
     private static let maximumTickGap: TimeInterval = 0.25
-    /// A mascot handed to a Mac that vanished is lost; a new one appears after this long without any.
+    /// This Mac's mascot handed to a Mac that vanished is lost; a new one appears after this long.
     private static let respawnDelay: TimeInterval = 60
-    private static let maximumMascots = 3
+    private static let maximumMascots = 4
     private static let bottom = 1.0
+    /// Only the last moments of a drag decide the throw.
+    private static let throwWindow: TimeInterval = 0.08
+
+    private enum Motion {
+        case walking(RoamingWalker)
+        case held(x: Double, lift: Double)
+        case flying(MascotFling)
+    }
 
     private struct Item {
-        var walker: RoamingWalker
+        let id: String
+        let home: String?
+        let look: Mascot?
+        var motion: Motion
         let panel: DesktopMascotPanel
         let sprite: DesktopMascotSprite
+
+        var isHeld: Bool {
+            if case .held = motion { return true }
+            return false
+        }
     }
 
     /// Whether a paired Mac that wants mascots is connected beyond this edge.
     var canHandOff: (PeerSide) -> Bool = { _ in false }
-    /// Sends a mascot that walked off an edge.
+    /// Sends a mascot that walked or flew off an edge.
     var handOff: (RoamingObject, PeerSide) -> Void = { _, _ in }
     var mascot: () -> Mascot = { .cat }
+    /// This Mac's device id: its own mascot carries it, so other Macs can tell it from theirs.
+    var homeID = ""
 
     private var items: [String: Item] = [:]
+    /// This Mac's own mascots that are visiting another Mac, by the edge they left through.
+    private var away: [String: PeerSide] = [:]
     private var timer: Timer?
     private var timerInterval: TimeInterval = 0
     private var lastTick = Date()
-    private var emptySince: Date?
+    private var aloneSince: Date?
+    private var dragOffset = CGVector.zero
+    private var dragSamples: [(time: Date, point: NSPoint)] = []
 
     var isRunning: Bool { timer != nil }
 
@@ -46,84 +69,182 @@ final class DesktopMascotController {
         timerInterval = 0
         items.values.forEach { $0.panel.close() }
         items = [:]
-        emptySince = nil
+        away = [:]
+        aloneSince = nil
     }
 
     /// A mascot arrived from the Mac beside this one.
     func receive(_ object: RoamingObject) {
         guard isRunning, object.kind == .mascot, object.hasValidID,
               items[object.id] == nil, items.count < Self.maximumMascots else { return }
-        let walker = RoamingWalker.arriving(object, maxX: geometry().maxX, size: MascotStroll.size,
-                                            seed: .random(in: 0...UInt64.max))
-        add(walker)
-        emptySince = nil
+        away[object.id] = nil
+        let area = geometry()
+        let motion: Motion
+        if let flight = object.flight {
+            motion = .flying(MascotFling.arriving(flight, entry: object.entryEdge, maxX: area.maxX,
+                                                  maxLift: area.maxLift, size: MascotStroll.size))
+        } else {
+            motion = .walking(RoamingWalker.arriving(object, maxX: area.maxX, size: MascotStroll.size,
+                                                     seed: .random(in: 0...UInt64.max)))
+        }
+        add(id: object.id, home: object.home, look: object.look, motion: motion)
+        aloneSince = nil
         schedule(interval: Self.frameInterval)
     }
 
-    // MARK: - Walking
+    /// A paired Mac went away: its visiting mascots go home with it, so it does not come back to two of them.
+    func peerLeft(_ peerID: String) {
+        for item in items.values where item.home == peerID && !item.isHeld {
+            item.panel.close()
+            items[item.id] = nil
+        }
+    }
+
+    // MARK: - Walking and flying
 
     private func tick() {
         let now = Date()
         let dt = min(now.timeIntervalSince(lastTick), Self.maximumTickGap)
         lastTick = now
-        guard !items.isEmpty else { return respawnIfDue(now) }
         let area = geometry()
         for id in Array(items.keys) {
-            guard var item = items[id] else { continue }
-            let (walker, handoff) = item.walker.advanced(by: dt, maxX: area.maxX, size: MascotStroll.size,
-                                                         canExit: canHandOff)
-            if let handoff {
-                item.panel.close()
-                items[id] = nil
-                handOff(handoff, handoff.direction.exitEdge)
-                continue
-            }
-            item.walker = walker
-            items[id] = item
-            item.sprite.update(mascot: shownMascot(), pose: walker.pose)
-            place(item, in: area)
+            guard let item = items[id] else { continue }
+            advance(item, dt: dt, area: area)
         }
-        if items.isEmpty {
-            emptySince = now
-            schedule(interval: Self.idleInterval)
-        }
+        respawnIfDue(now)
+        schedule(interval: items.isEmpty ? Self.idleInterval : Self.frameInterval)
     }
 
+    private func advance(_ item: Item, dt: TimeInterval, area: Area) {
+        var item = item
+        switch item.motion {
+        case .held:
+            return
+        case let .walking(walker):
+            let (next, handoff) = walker.advanced(by: dt, maxX: area.maxX, size: MascotStroll.size, canExit: canHandOff)
+            if let handoff {
+                return send(item, object: handoff, side: handoff.direction.exitEdge)
+            }
+            item.motion = .walking(next)
+        case let .flying(fling):
+            switch fling.advanced(by: dt, maxX: area.maxX, maxLift: area.maxLift, size: MascotStroll.size,
+                                  canExit: canHandOff) {
+            case let .flying(next):
+                item.motion = .flying(next)
+            case let .landed(x, facesRight):
+                item.motion = .walking(RoamingWalker.landed(id: item.id, x: x, facesRight: facesRight,
+                                                            seed: .random(in: 0...UInt64.max)))
+            case let .gone(side, flight):
+                let object = RoamingObject(id: item.id, kind: .mascot, yFraction: Self.bottom,
+                                           direction: side == .left ? .left : .right, state: .walking, flight: flight)
+                return send(item, object: object, side: side)
+            }
+        }
+        items[item.id] = item
+        show(item, in: area)
+    }
+
+    private func send(_ item: Item, object: RoamingObject, side: PeerSide) {
+        item.panel.close()
+        items[item.id] = nil
+        let isOwn = item.home == homeID
+        if isOwn { away[item.id] = side }
+        handOff(RoamingObject(id: object.id, kind: object.kind, yFraction: object.yFraction,
+                              direction: object.direction, state: object.state,
+                              home: item.home, look: item.look ?? ownMascot(), flight: object.flight), side)
+    }
+
+    /// This Mac always has one mascot of its own, here or visiting a Mac that is still connected.
     private func respawnIfDue(_ now: Date) {
-        let since = emptySince ?? now
-        emptySince = since
+        away = away.filter { canHandOff($0.value) }
+        let hasOwn = items.values.contains { $0.home == homeID } || !away.isEmpty
+        guard !hasOwn else { aloneSince = nil; return }
+        let since = aloneSince ?? now
+        aloneSince = since
         guard now.timeIntervalSince(since) >= Self.respawnDelay else { return }
         spawn()
-        emptySince = nil
-        schedule(interval: Self.frameInterval)
+        aloneSince = nil
     }
 
     private func spawn() {
-        let walker = RoamingWalker.spawn(id: UUID().uuidString, yFraction: Self.bottom, maxX: geometry().maxX,
+        let id = "\(homeID.prefix(8))-\(UUID().uuidString.prefix(8))"
+        let walker = RoamingWalker.spawn(id: id, yFraction: Self.bottom, maxX: geometry().maxX,
                                          seed: .random(in: 0...UInt64.max))
-        add(walker)
+        add(id: id, home: homeID, look: nil, motion: .walking(walker))
     }
 
-    private func add(_ walker: RoamingWalker) {
-        let sprite = DesktopMascotSprite(mascot: shownMascot(), pose: walker.pose)
+    private func add(id: String, home: String?, look: Mascot?, motion: Motion) {
+        let sprite = DesktopMascotSprite(mascot: look ?? ownMascot(), pose: Self.pose(motion))
         let panel = DesktopMascotPanel(sprite: sprite)
-        let item = Item(walker: walker, panel: panel, sprite: sprite)
-        items[walker.id] = item
-        place(item, in: geometry())
+        panel.onGrab = { [weak self] point in self?.grab(id, at: point) }
+        panel.onDrag = { [weak self] point in self?.drag(id, to: point) }
+        panel.onRelease = { [weak self] point in self?.release(id, at: point) }
+        let item = Item(id: id, home: home, look: look, motion: motion, panel: panel, sprite: sprite)
+        items[id] = item
+        show(item, in: geometry())
         panel.orderFrontRegardless()
     }
 
-    private func shownMascot() -> Mascot {
+    /// Visitors keep their home Mac's look; this Mac's own mascot follows the choice made here.
+    private func ownMascot() -> Mascot {
         let chosen = mascot()
         return chosen == .none ? .cat : chosen
     }
 
+    private static func pose(_ motion: Motion) -> MascotPose {
+        switch motion {
+        case let .walking(walker): walker.pose
+        case let .flying(fling): fling.pose
+        case let .held(x, _): MascotPose(x: x, facesRight: true, isWalking: false, isPickedUp: true, steps: 0, elapsed: 0)
+        }
+    }
+
+    // MARK: - Throwing
+
+    private func grab(_ id: String, at point: NSPoint) {
+        guard var item = items[id] else { return }
+        let origin = item.panel.frame.origin
+        dragOffset = CGVector(dx: point.x - origin.x, dy: point.y - origin.y)
+        dragSamples = [(Date(), point)]
+        let area = geometry()
+        item.motion = .held(x: Double(origin.x - area.visible.minX), lift: Double(origin.y - area.visible.minY))
+        items[id] = item
+        show(item, in: area)
+    }
+
+    private func drag(_ id: String, to point: NSPoint) {
+        guard var item = items[id], item.isHeld else { return }
+        let now = Date()
+        dragSamples.append((now, point))
+        dragSamples.removeAll { now.timeIntervalSince($0.time) > Self.throwWindow * 2 }
+        let area = geometry()
+        let x = min(max(Double(point.x - dragOffset.dx - area.visible.minX), 0), area.maxX)
+        let lift = min(max(Double(point.y - dragOffset.dy - area.visible.minY), 0), area.maxLift)
+        item.motion = .held(x: x, lift: lift)
+        items[id] = item
+        show(item, in: area)
+    }
+
+    private func release(_ id: String, at point: NSPoint) {
+        guard var item = items[id], case let .held(x, lift) = item.motion else { return }
+        let now = Date()
+        let first = dragSamples.first { now.timeIntervalSince($0.time) <= Self.throwWindow } ?? (now, point)
+        let span = max(now.timeIntervalSince(first.time), 1.0 / 120)
+        let vx = Double(point.x - first.point.x) / span
+        let vy = Double(point.y - first.point.y) / span
+        dragSamples = []
+        item.motion = .flying(MascotFling(x: x, lift: lift, vx: vx, vy: vy))
+        items[id] = item
+        lastTick = now
+        schedule(interval: Self.frameInterval)
+    }
+
     // MARK: - Screen
 
-    @MainActor
     private struct Area {
         let visible: NSRect
         var maxX: Double { max(Double(visible.width) - Double(MascotStroll.size), 0) }
+        var maxLift: Double { max(Double(visible.height) - Double(MascotStroll.size), 0) }
     }
 
     /// The main display without the menu bar and Dock.
@@ -131,12 +252,17 @@ final class DesktopMascotController {
         Area(visible: NSScreen.screens.first?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1440, height: 900))
     }
 
-    private func place(_ item: Item, in area: Area) {
-        let side = Double(MascotStroll.size)
+    private func show(_ item: Item, in area: Area) {
+        item.sprite.update(mascot: item.look ?? ownMascot(), pose: Self.pose(item.motion))
         let visible = area.visible
-        let top = Double(visible.maxY) - item.walker.yFraction * Double(visible.height) - side / 2
-        let y = min(max(top, Double(visible.minY)), Double(visible.maxY) - side)
-        let origin = NSPoint(x: Double(visible.minX) + item.walker.x, y: y)
+        let x: Double
+        let lift: Double
+        switch item.motion {
+        case let .walking(walker): (x, lift) = (walker.x, 0)
+        case let .flying(fling): (x, lift) = (fling.x, fling.lift)
+        case let .held(heldX, heldLift): (x, lift) = (heldX, heldLift)
+        }
+        let origin = NSPoint(x: Double(visible.minX) + x, y: Double(visible.minY) + lift)
         if item.panel.frame.origin != origin { item.panel.setFrameOrigin(origin) }
     }
 
