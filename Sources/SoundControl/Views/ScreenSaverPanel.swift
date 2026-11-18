@@ -36,6 +36,12 @@ struct ScreenSaverPanel: View {
                     Footnote("Click a session chip on the screen saver to watch it live.")
                 }
             }
+            PopoverSection("Title") {
+                TitleControls(settings: settings, update: model.updateScreenSaver)
+            }
+            PopoverSection("Widget Size") {
+                WidgetSizeControls(settings: settings, update: model.updateScreenSaver)
+            }
             PopoverSection("Appearance") {
                 SettingRow("Background", detail: settings.background.title, systemImage: "photo.on.rectangle") { EmptyView() }
                 BackgroundControls(settings: settings,

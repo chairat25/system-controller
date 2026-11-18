@@ -100,6 +100,8 @@ struct CalendarWidget: View {
                         dayCell(day, today: Self.calendar.component(.day, from: context.date))
                     }
                 }
+                // A lazy grid takes all the width it is offered; the widget should hug its seven columns.
+                .fixedSize()
             }
         }
     }
