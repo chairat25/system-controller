@@ -7,7 +7,7 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-VERSION="${VERSION:-1.4.0}"
+VERSION="${VERSION:-$(git -C "$(dirname "$0")/.." describe --tags --abbrev=0 2>/dev/null | sed "s/^v//")}"
 BUILD_NUMBER="$(date +%Y%m%d%H%M)"
 APP_NAME="System Controller"
 APP="$ROOT/build/$APP_NAME.app"

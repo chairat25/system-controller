@@ -33,7 +33,7 @@ struct LANSyncSection: View {
     }
 }
 
-private struct PairedMacRow: View {
+struct PairedMacRow: View {
     let peer: PairedPeer
     let isConnected: Bool
     let setSide: (PeerSide) -> Void
@@ -60,7 +60,7 @@ private struct PairedMacRow: View {
     }
 }
 
-private struct PairingControls: View {
+struct PairingControls: View {
     let pairing: LANSyncPairing
 
     var body: some View {
