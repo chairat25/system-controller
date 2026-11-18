@@ -82,16 +82,20 @@ enum ScreenSaverBackgroundStore {
     }
 
     static func cacheDesktopWallpaper(from sourceURL: URL) {
-        guard let resolved = resolveImageFile(at: sourceURL) else { return }
-        let jpegData: Data? = autoreleasepool {
+        guard let jpegData = downsampledJPEGData(from: sourceURL) else { return }
+        try? FileManager.default.createDirectory(
+            at: wallpaperCacheURL.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try? jpegData.write(to: wallpaperCacheURL, options: .atomic)
+    }
+
+    /// JPEG bytes of the image at `sourceURL` (a folder means its first image), downsampled; nil when unreadable.
+    static func downsampledJPEGData(from sourceURL: URL) -> Data? {
+        guard let resolved = resolveImageFile(at: sourceURL) else { return nil }
+        return autoreleasepool {
             guard let cgImage = downsizedCGImage(at: resolved, maxPixelSize: maxPixelSize) else { return nil }
             let bitmap = NSBitmapImageRep(cgImage: cgImage)
             return bitmap.representation(using: .jpeg, properties: [.compressionFactor: 0.85])
         }
-        guard let jpegData else { return }
-        try? FileManager.default.createDirectory(
-            at: wallpaperCacheURL.deletingLastPathComponent(), withIntermediateDirectories: true)
-        try? jpegData.write(to: wallpaperCacheURL, options: .atomic)
     }
 
     static func loadDesktopWallpaper(at liveURL: URL?) -> NSImage? {

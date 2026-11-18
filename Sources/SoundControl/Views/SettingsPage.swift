@@ -107,6 +107,8 @@ struct SettingsPage: View {
                 WidgetLayoutResetButton(settings: model.screenSaver, update: model.updateScreenSaver)
             }
 
+            LANSyncSection()
+
             Section("Thresholds") {
                 Stepper("Battery low at \(model.config.batteryLowPercent)%", value: Binding(
                     get: { model.config.batteryLowPercent },
