@@ -139,6 +139,15 @@ private struct AppSettingsPage: View {
                               systemImage: "1.circle", isOn: model.config.avoidOverlap,
                               onChange: { value in model.update { $0.withAvoidOverlap(value) } })
             }
+            PopoverSection("Sync") {
+                SettingToggle(title: "Sync wallpaper", detail: "Same wallpaper on every paired Mac",
+                              systemImage: "photo.on.rectangle", isOn: model.lanSync.settings.isWallpaperSyncOn,
+                              onChange: { value in model.lanSync.update { $0.withWallpaperSync(value) } })
+                SettingToggle(title: "Mascot roams between Macs", detail: "Walks across to a paired Mac",
+                              systemImage: "figure.walk", isOn: model.lanSync.settings.isMascotRoamingOn,
+                              onChange: { value in model.lanSync.update { $0.withMascotRoaming(value) } })
+                Footnote("Pair Macs in the main window: Settings → Sync.")
+            }
             PopoverSection("Permissions") {
                 SettingRow("Input Monitoring", detail: "Keyboard and mouse triggers", systemImage: "keyboard") {
                     permissionStatus(model.hasInputPermission) { PrivacySettings.openInputMonitoring() }

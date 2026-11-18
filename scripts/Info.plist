@@ -32,5 +32,11 @@
     <string>Sound Control plays a sound when Bluetooth devices such as AirPods connect or disconnect.</string>
     <key>NSDownloadsFolderUsageDescription</key>
     <string>Sound Control plays a sound when a new download finishes. File contents are never read.</string>
+    <key>NSLocalNetworkUsageDescription</key>
+    <string>System Controller finds your paired Macs on the local network to share wallpapers and let the desktop mascot walk between screens.</string>
+    <key>NSBonjourServices</key>
+    <array>
+        <string>_syscontrol._tcp</string>
+    </array>
 </dict>
 </plist>

@@ -40,6 +40,8 @@ final class AppModel {
     let sessions = ClaudeSessionMonitor()
     let terminalPermissions = TerminalPermissions()
     let updater = AutoUpdater()
+    /// Shares wallpapers and the roaming desktop mascot with paired Macs; idle until a sync toggle is on.
+    let lanSync = LANSyncService()
 
     @ObservationIgnored private let store: ConfigStore
     @ObservationIgnored private let soundStore: UserSoundStore
@@ -96,6 +98,13 @@ final class AppModel {
                     isAutoUpdateEnabled: { [weak self] in self?.appSettings.autoUpdateEnabled ?? true },
                     isLocked: { [weak self] in self?.keyboardLock.isLocked ?? false }
                 )
+                self.lanSync.start(hooks: LANSyncService.Hooks(
+                    screenSaverName: { [weak self] in self?.screenSaver.customBackgroundName },
+                    screenSaverApplied: { [weak self] name in
+                        self?.updateScreenSaver { $0.withCustomBackground(name: name) }
+                    },
+                    mascot: { [weak self] in self?.screenSaver.activeMascot ?? .cat }
+                ))
                 if self.screenSaver.background == .desktopWallpaper {
                     ScreenSaverBackgroundStore.cacheDesktopWallpaper()
                 }
@@ -439,6 +448,7 @@ final class AppModel {
         do {
             let name = try ScreenSaverBackgroundStore.importImage(from: url)
             updateScreenSaver { $0.withCustomBackground(name: name) }
+            lanSync.screenSaverBackgroundChanged()
         } catch {
             alertMessage = error.localizedDescription
         }
