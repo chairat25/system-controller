@@ -2,11 +2,14 @@ import AppKit
 import SoundControlCore
 
 /// Runs the desktop mascots on this Mac: keeps this Mac's own mascot alive, walks every mascot on screen, lets the
-/// owner pick one up and throw it, and passes a mascot to a paired Mac when it walks or flies off an edge with a
+/// owner pick one up and throw it, makes it react to clicks (curious, then annoyed, then it runs away), points its
+/// eyes at the mouse, and passes a mascot to a paired Mac when it walks or flies off an edge with a
 /// neighbour. Visitors keep the look of their home Mac. Panels and timers exist only between `start` and `stop`.
 @MainActor
 final class DesktopMascotController {
     private static let frameInterval: TimeInterval = 1.0 / 24
+    /// While every mascot rests, 12 frames a second still shows breathing and blinks, at half the work.
+    private static let restingInterval: TimeInterval = 1.0 / 12
     private static let idleInterval: TimeInterval = 5
     private static let maximumTickGap: TimeInterval = 0.25
     /// This Mac's mascot handed to a Mac that vanished is lost; a new one appears after this long.
@@ -18,7 +21,7 @@ final class DesktopMascotController {
 
     private enum Motion {
         case walking(RoamingWalker)
-        case held(x: Double, lift: Double)
+        case held(x: Double, lift: Double, since: Date)
         case flying(MascotFling)
     }
 
@@ -27,11 +30,18 @@ final class DesktopMascotController {
         let home: String?
         let look: Mascot?
         var motion: Motion
+        var mood = MascotMood.calm
         let panel: DesktopMascotPanel
         let sprite: DesktopMascotSprite
 
         var isHeld: Bool {
             if case .held = motion { return true }
+            return false
+        }
+
+        /// Resting on the floor: nothing moves but breathing and blinks.
+        var isResting: Bool {
+            if case let .walking(walker) = motion { return !walker.isWalking }
             return false
         }
     }
@@ -112,7 +122,9 @@ final class DesktopMascotController {
             advance(item, dt: dt, area: area)
         }
         respawnIfDue(now)
-        schedule(interval: items.isEmpty ? Self.idleInterval : Self.frameInterval)
+        let interval = items.isEmpty ? Self.idleInterval
+            : items.values.allSatisfy(\.isResting) ? Self.restingInterval : Self.frameInterval
+        schedule(interval: interval)
     }
 
     private func advance(_ item: Item, dt: TimeInterval, area: Area) {
@@ -179,6 +191,7 @@ final class DesktopMascotController {
         panel.onGrab = { [weak self] point in self?.grab(id, at: point) }
         panel.onDrag = { [weak self] point in self?.drag(id, to: point) }
         panel.onRelease = { [weak self] point in self?.release(id, at: point) }
+        panel.onClick = { [weak self] point in self?.poke(id, at: point) }
         let item = Item(id: id, home: home, look: look, motion: motion, panel: panel, sprite: sprite)
         items[id] = item
         show(item, in: geometry())
@@ -195,8 +208,33 @@ final class DesktopMascotController {
         switch motion {
         case let .walking(walker): walker.pose
         case let .flying(fling): fling.pose
-        case let .held(x, _): MascotPose(x: x, facesRight: true, isWalking: false, isPickedUp: true, steps: 0, elapsed: 0)
+        case let .held(x, _, since):
+            MascotPose(x: x, facesRight: true, isWalking: false, isPickedUp: true, steps: 0,
+                       elapsed: Date().timeIntervalSince(since))
         }
+    }
+
+    // MARK: - Clicking
+
+    /// Each click builds up its mood; enough in a row and it runs off, away from the mouse.
+    private func poke(_ id: String, at point: NSPoint) {
+        guard var item = items[id] else { return }
+        item.mood = item.mood.poked(at: Date().timeIntervalSinceReferenceDate)
+        if item.mood.wantsToFlee, case let .walking(walker) = item.motion {
+            let area = geometry()
+            item.motion = .walking(walker.fleeing(from: Double(point.x - area.visible.minX),
+                                                  size: Double(MascotStroll.size)))
+            schedule(interval: Self.frameInterval)
+        }
+        items[id] = item
+        show(item, in: geometry())
+    }
+
+    private static func face(_ item: Item, at time: TimeInterval) -> MascotFace {
+        if case let .walking(walker) = item.motion, walker.isRunning { return .fleeing }
+        let face = item.mood.face(at: time)
+        // Only a running mascot looks scared; caught or thrown, it is just annoyed.
+        return face == .fleeing ? .annoyed : face
     }
 
     // MARK: - Throwing
@@ -207,26 +245,28 @@ final class DesktopMascotController {
         dragOffset = CGVector(dx: point.x - origin.x, dy: point.y - origin.y)
         dragSamples = [(Date(), point)]
         let area = geometry()
-        item.motion = .held(x: Double(origin.x - area.visible.minX), lift: Double(origin.y - area.visible.minY))
+        item.motion = .held(x: Double(origin.x - area.visible.minX), lift: Double(origin.y - area.visible.minY),
+                            since: Date())
+        schedule(interval: Self.frameInterval)
         items[id] = item
         show(item, in: area)
     }
 
     private func drag(_ id: String, to point: NSPoint) {
-        guard var item = items[id], item.isHeld else { return }
+        guard var item = items[id], case let .held(_, _, since) = item.motion else { return }
         let now = Date()
         dragSamples.append((now, point))
         dragSamples.removeAll { now.timeIntervalSince($0.time) > Self.throwWindow * 2 }
         let area = geometry()
         let x = min(max(Double(point.x - dragOffset.dx - area.visible.minX), 0), area.maxX)
         let lift = min(max(Double(point.y - dragOffset.dy - area.visible.minY), 0), area.maxLift)
-        item.motion = .held(x: x, lift: lift)
+        item.motion = .held(x: x, lift: lift, since: since)
         items[id] = item
         show(item, in: area)
     }
 
     private func release(_ id: String, at point: NSPoint) {
-        guard var item = items[id], case let .held(x, lift) = item.motion else { return }
+        guard var item = items[id], case let .held(x, lift, _) = item.motion else { return }
         let now = Date()
         let first = dragSamples.first { now.timeIntervalSince($0.time) <= Self.throwWindow } ?? (now, point)
         let span = max(now.timeIntervalSince(first.time), 1.0 / 120)
@@ -253,16 +293,20 @@ final class DesktopMascotController {
     }
 
     private func show(_ item: Item, in area: Area) {
-        item.sprite.update(mascot: item.look ?? ownMascot(), pose: Self.pose(item.motion))
         let visible = area.visible
         let x: Double
         let lift: Double
         switch item.motion {
         case let .walking(walker): (x, lift) = (walker.x, 0)
         case let .flying(fling): (x, lift) = (fling.x, fling.lift)
-        case let .held(heldX, heldLift): (x, lift) = (heldX, heldLift)
+        case let .held(heldX, heldLift, _): (x, lift) = (heldX, heldLift)
         }
         let origin = NSPoint(x: Double(visible.minX) + x, y: Double(visible.minY) + lift)
+        // The mouse in the mascot's own view points, top-left origin, so its eyes can follow it.
+        let mouse = NSEvent.mouseLocation
+        let target = MascotPoint(x: Double(mouse.x - origin.x), y: Double(origin.y + MascotStroll.size - mouse.y))
+        item.sprite.update(mascot: item.look ?? ownMascot(), pose: Self.pose(item.motion),
+                           face: Self.face(item, at: Date().timeIntervalSinceReferenceDate), target: target)
         if item.panel.frame.origin != origin { item.panel.setFrameOrigin(origin) }
     }
 

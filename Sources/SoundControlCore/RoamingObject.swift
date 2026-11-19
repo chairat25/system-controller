@@ -44,6 +44,23 @@ public struct RoamingObject: Codable, Sendable, Equatable, Identifiable {
         self.flight = flight
     }
 
+    private enum CodingKeys: String, CodingKey {
+        case id, kind, yFraction, direction, state, home, look, flight
+    }
+
+    /// A look this Mac does not know (a newer animal) arrives as no look, instead of dropping the whole object.
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.init(id: try container.decode(String.self, forKey: .id),
+                  kind: try container.decode(RoamingKind.self, forKey: .kind),
+                  yFraction: try container.decode(Double.self, forKey: .yFraction),
+                  direction: try container.decode(RoamingDirection.self, forKey: .direction),
+                  state: try container.decode(RoamingState.self, forKey: .state),
+                  home: try container.decodeIfPresent(String.self, forKey: .home),
+                  look: (try? container.decodeIfPresent(Mascot.self, forKey: .look)) ?? nil,
+                  flight: try container.decodeIfPresent(RoamingFlight.self, forKey: .flight))
+    }
+
     /// An object from the network is only taken when its id is a printable token.
     public var hasValidID: Bool { PairedPeer.isValidID(id) }
 

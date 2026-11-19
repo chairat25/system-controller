@@ -146,6 +146,13 @@ private struct AppSettingsPage: View {
                 SettingToggle(title: "Mascot roams between Macs", detail: "Walks across to a paired Mac",
                               systemImage: "figure.walk", isOn: model.lanSync.settings.isMascotRoamingOn,
                               onChange: { value in model.lanSync.update { $0.withMascotRoaming(value) } })
+                if model.lanSync.settings.isMascotRoamingOn {
+                    // Each Mac picks its own animal; a visitor keeps the look of the Mac it came from.
+                    MascotGrid(selection: model.screenSaver.activeMascot) { mascot in
+                        model.updateScreenSaver { $0.withMascot(mascot) }
+                    }
+                    Footnote("This Mac's animal. Each Mac picks its own; the same one walks on the screen saver.")
+                }
                 ForEach(model.lanSync.settings.pairedPeers) { peer in
                     PairedMacRow(peer: peer, isConnected: model.lanSync.connectedPeerIDs.contains(peer.id),
                                  setSide: { side in model.lanSync.update { $0.withSide(side, for: peer.id) } },

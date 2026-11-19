@@ -3,21 +3,32 @@ import Observation
 import SoundControlCore
 import SwiftUI
 
-/// What one desktop mascot looks like right now. The controller writes it every frame while it walks.
+/// What one desktop mascot looks like right now. The controller offers a new picture every frame; it is kept, and
+/// the view redrawn, only when it differs, so a resting sprite mascot redraws a few times a second at most.
 @MainActor
 @Observable
 final class DesktopMascotSprite {
-    private(set) var mascot: Mascot
-    private(set) var pose: MascotPose
+    private(set) var drawing: MascotDrawing
+    @ObservationIgnored private(set) var sheet: MascotSpriteSheet?
+    @ObservationIgnored private var mascot: Mascot
+    @ObservationIgnored private let cat = MeawkiCatDriver()
 
     init(mascot: Mascot, pose: MascotPose) {
         self.mascot = mascot
-        self.pose = pose
+        let sheet = MascotSpriteSheet.shared(for: mascot)
+        self.sheet = sheet
+        drawing = .make(mascot: mascot, sheet: sheet, cat: cat, pose: pose, face: .calm, target: nil,
+                        size: Double(MascotStroll.size))
     }
 
-    func update(mascot: Mascot, pose: MascotPose) {
-        if mascot != self.mascot { self.mascot = mascot }
-        if pose != self.pose { self.pose = pose }
+    func update(mascot: Mascot, pose: MascotPose, face: MascotFace, target: MascotPoint?) {
+        if mascot != self.mascot {
+            self.mascot = mascot
+            sheet = MascotSpriteSheet.shared(for: mascot)
+        }
+        let next = MascotDrawing.make(mascot: mascot, sheet: sheet, cat: cat, pose: pose, face: face, target: target,
+                                      size: Double(MascotStroll.size))
+        if next != drawing { drawing = next }
     }
 }
 
@@ -26,24 +37,20 @@ private struct DesktopMascotArt: View {
     let sprite: DesktopMascotSprite
 
     var body: some View {
-        let pose = sprite.pose
-        let mascot = sprite.mascot
-        Canvas { graphics, size in
-            MascotArt.draw(mascot, pose: pose, in: &graphics, size: size)
-        }
-        .frame(width: MascotStroll.size, height: MascotStroll.size)
-        .scaleEffect(x: pose.facesRight ? 1 : -1, y: 1)
-        .accessibilityHidden(true)
+        MascotFigure(drawing: sprite.drawing, sheet: sprite.sheet)
+            .frame(width: MascotStroll.size, height: MascotStroll.size)
     }
 }
 
 /// A transparent, borderless window that floats over everything. It is only as big as the mascot, so it costs
-/// almost no memory and only the mascot itself takes clicks: press to pick it up, drag, and let go to throw it.
+/// almost no memory and only the mascot itself takes clicks: click it to poke it, or press, drag and let go to
+/// throw it.
 /// The controller moves it as the mascot walks or flies.
 final class DesktopMascotPanel: NSPanel {
     var onGrab: (NSPoint) -> Void = { _ in }
     var onDrag: (NSPoint) -> Void = { _ in }
     var onRelease: (NSPoint) -> Void = { _ in }
+    var onClick: (NSPoint) -> Void = { _ in }
 
     @MainActor
     init(sprite: DesktopMascotSprite) {
@@ -71,22 +78,43 @@ final class DesktopMascotPanel: NSPanel {
     override var canBecomeMain: Bool { false }
 }
 
-/// Takes the mouse for the whole mascot, above the drawing, and reports it in screen points.
+/// Takes the mouse for the whole mascot, above the drawing, and reports it in screen points. A press only picks the
+/// mascot up once the mouse moves a few points; a press and release in place is a click.
 private final class MascotGrabView: NSView {
+    private static let dragThreshold: CGFloat = 3
+
     weak var panel: DesktopMascotPanel?
+    private var pressedAt: NSPoint?
+    private var isDragging = false
 
     override func hitTest(_ point: NSPoint) -> NSView? { frame.contains(point) ? self : nil }
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
 
     override func mouseDown(with event: NSEvent) {
-        NSCursor.closedHand.push()
-        panel?.onGrab(NSEvent.mouseLocation)
+        pressedAt = NSEvent.mouseLocation
+        isDragging = false
     }
 
-    override func mouseDragged(with event: NSEvent) { panel?.onDrag(NSEvent.mouseLocation) }
+    override func mouseDragged(with event: NSEvent) {
+        let point = NSEvent.mouseLocation
+        if !isDragging {
+            guard let start = pressedAt, hypot(point.x - start.x, point.y - start.y) >= Self.dragThreshold else { return }
+            isDragging = true
+            NSCursor.closedHand.push()
+            panel?.onGrab(start)
+        }
+        panel?.onDrag(point)
+    }
 
     override func mouseUp(with event: NSEvent) {
-        NSCursor.pop()
-        panel?.onRelease(NSEvent.mouseLocation)
+        let point = NSEvent.mouseLocation
+        if isDragging {
+            NSCursor.pop()
+            panel?.onRelease(point)
+        } else {
+            panel?.onClick(point)
+        }
+        pressedAt = nil
+        isDragging = false
     }
 }

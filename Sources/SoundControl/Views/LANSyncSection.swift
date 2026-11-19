@@ -16,6 +16,14 @@ struct LANSyncSection: View {
             Toggle("Mascot roams between Macs", isOn: Binding(
                 get: { sync.settings.isMascotRoamingOn },
                 set: { value in sync.update { $0.withMascotRoaming(value) } }))
+            if sync.settings.isMascotRoamingOn {
+                LabeledContent("This Mac's animal") {
+                    Text(model.screenSaver.activeMascot.title).foregroundStyle(.secondary)
+                }
+                MascotGrid(selection: model.screenSaver.activeMascot) { mascot in
+                    model.updateScreenSaver { $0.withMascot(mascot) }
+                }
+            }
             ForEach(sync.settings.pairedPeers) { peer in
                 PairedMacRow(peer: peer, isConnected: sync.connectedPeerIDs.contains(peer.id),
                              setSide: { side in sync.update { $0.withSide(side, for: peer.id) } },

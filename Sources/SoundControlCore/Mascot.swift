@@ -2,7 +2,7 @@ import Foundation
 
 /// The little animal that wanders along the bottom of the screen saver, so a locked screen looks friendly.
 public enum Mascot: String, Codable, Sendable, CaseIterable, Identifiable {
-    case none, cat, puppy, bunny, panda, penguin
+    case none, cat, pig, puppy, bunny, panda, penguin, hippo
 
     public static let animals: [Mascot] = allCases.filter { $0 != .none }
 
@@ -12,10 +12,12 @@ public enum Mascot: String, Codable, Sendable, CaseIterable, Identifiable {
         switch self {
         case .none: "None"
         case .cat: "Cat"
+        case .pig: "Pig"
         case .puppy: "Puppy"
         case .bunny: "Bunny"
         case .panda: "Panda"
         case .penguin: "Penguin"
+        case .hippo: "Hippo"
         }
     }
 }
@@ -29,18 +31,25 @@ public struct MascotPose: Sendable, Equatable {
     public let facesRight: Bool
     public let isWalking: Bool
     public let isPickedUp: Bool
+    /// Running away, faster than a walk.
+    public let isRunning: Bool
+    /// In the air after a throw.
+    public let isFlying: Bool
     /// Steps taken so far; the fraction drives the leg swing.
     public let steps: Double
     /// Seconds since this pause or walk began, for blinking and breathing.
     public let elapsed: TimeInterval
 
     public init(x: Double, y: Double = 0, facesRight: Bool, isWalking: Bool,
-                isPickedUp: Bool = false, steps: Double, elapsed: TimeInterval) {
+                isPickedUp: Bool = false, isRunning: Bool = false, isFlying: Bool = false,
+                steps: Double, elapsed: TimeInterval) {
         self.x = x
         self.y = y
         self.facesRight = facesRight
         self.isWalking = isWalking
         self.isPickedUp = isPickedUp
+        self.isRunning = isRunning
+        self.isFlying = isFlying
         self.steps = steps
         self.elapsed = elapsed
     }

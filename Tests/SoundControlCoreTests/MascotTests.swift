@@ -97,9 +97,9 @@ struct MascotRouteTests {
 
 @Suite("Mascot choice")
 struct MascotChoiceTests {
-    @Test("five animals, a cat by default, and None turns it off")
+    @Test("seven animals, a cat by default, and None turns it off")
     func choices() {
-        #expect(Mascot.animals.count == 5)
+        #expect(Mascot.animals.count == 7)
         #expect(!Mascot.animals.contains(.none))
         #expect(ScreenSaverSettings.default.mascot == .cat)
         #expect(ScreenSaverSettings.default.withMascot(.none).mascot == .none)

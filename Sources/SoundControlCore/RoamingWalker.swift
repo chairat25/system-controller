@@ -13,6 +13,10 @@ public struct RoamingWalker: Sendable, Equatable {
     static let walkRange: TimeInterval = 8
     static let minimumPause: TimeInterval = 2
     static let pauseRange: TimeInterval = 5
+    /// Running away is this many times a walk.
+    static let runFactor: Double = 3.2
+    /// How long one scare makes it run.
+    static let fleeDuration: TimeInterval = 1.8
 
     public let id: String
     public let kind: RoamingKind
@@ -21,6 +25,8 @@ public struct RoamingWalker: Sendable, Equatable {
     public let yFraction: Double
     public let facesRight: Bool
     public let isWalking: Bool
+    /// Running away after being clicked too much.
+    public let isRunning: Bool
     public let phase: Phase
     /// Steps taken so far; the fraction drives the leg swing.
     public let steps: Double
@@ -30,7 +36,8 @@ public struct RoamingWalker: Sendable, Equatable {
     private let randomState: UInt64
 
     public var pose: MascotPose {
-        MascotPose(x: x, y: 0, facesRight: facesRight, isWalking: isWalking, steps: steps, elapsed: elapsed)
+        MascotPose(x: x, y: 0, facesRight: facesRight, isWalking: isWalking, isRunning: isRunning, steps: steps,
+                   elapsed: elapsed)
     }
 
     /// A new object resting somewhere on the screen.
@@ -38,14 +45,14 @@ public struct RoamingWalker: Sendable, Equatable {
         let (placement, afterPlacement) = roll(seed)
         let (pause, state) = roll(afterPlacement)
         return Self(id: id, kind: kind, x: placement * max(maxX, 0), yFraction: yFraction, facesRight: placement < 0.5,
-                    isWalking: false, phase: .inside, steps: 0, elapsed: 0,
+                    isWalking: false, isRunning: false, phase: .inside, steps: 0, elapsed: 0,
                     timeLeft: minimumPause + pause * pauseRange, randomState: state)
     }
 
     /// An object that came down on the floor after a throw: it rests where it landed, then strolls on.
     public static func landed(id: String, kind: RoamingKind = .mascot, x: Double, facesRight: Bool, seed: UInt64) -> Self {
-        Self(id: id, kind: kind, x: x, yFraction: 1, facesRight: facesRight, isWalking: false, phase: .inside,
-             steps: 0, elapsed: 0, timeLeft: minimumPause, randomState: seed)
+        Self(id: id, kind: kind, x: x, yFraction: 1, facesRight: facesRight, isWalking: false, isRunning: false,
+             phase: .inside, steps: 0, elapsed: 0, timeLeft: minimumPause, randomState: seed)
     }
 
     /// An object that arrived from the next screen: it walks in from the edge it was handed over at.
@@ -53,12 +60,21 @@ public struct RoamingWalker: Sendable, Equatable {
         let isFromLeft = object.entryEdge == .left
         if object.state == .resting {
             return Self(id: object.id, kind: object.kind, x: isFromLeft ? 0 : max(maxX, 0), yFraction: object.yFraction,
-                        facesRight: isFromLeft, isWalking: false, phase: .inside, steps: 0, elapsed: 0,
-                        timeLeft: minimumPause, randomState: seed)
+                        facesRight: isFromLeft, isWalking: false, isRunning: false, phase: .inside, steps: 0,
+                        elapsed: 0, timeLeft: minimumPause, randomState: seed)
         }
         return Self(id: object.id, kind: object.kind, x: isFromLeft ? -size : max(maxX, 0) + size,
-                    yFraction: object.yFraction, facesRight: isFromLeft, isWalking: true, phase: .entering,
-                    steps: 0, elapsed: 0, timeLeft: 0, randomState: seed)
+                    yFraction: object.yFraction, facesRight: isFromLeft, isWalking: true, isRunning: false,
+                    phase: .entering, steps: 0, elapsed: 0, timeLeft: 0, randomState: seed)
+    }
+
+    /// Runs off the other way from `pointX` (the mouse, in the same points as `x`). Only while walking or
+    /// resting on this screen; it keeps running for a moment, then catches its breath.
+    public func fleeing(from pointX: Double, size: Double) -> Self {
+        guard phase == .inside else { return self }
+        let towardRight = pointX < x + size / 2
+        return copy(facesRight: towardRight, isWalking: true, isRunning: true, elapsed: 0,
+                    timeLeft: Self.fleeDuration)
     }
 
     /// The walker `dt` seconds later, plus the object to hand over when it has walked fully off an edge
@@ -68,7 +84,7 @@ public struct RoamingWalker: Sendable, Equatable {
     ///   - canExit: whether a neighbour is reachable beyond that edge.
     public func advanced(by dt: TimeInterval, maxX: Double, size: Double,
                          canExit: (PeerSide) -> Bool) -> (walker: Self, handoff: RoamingObject?) {
-        let step = Self.speed * dt
+        let step = Self.speed * (isRunning ? Self.runFactor : 1) * dt
         let direction: Double = facesRight ? 1 : -1
         switch phase {
         case let .leaving(side):
@@ -108,14 +124,21 @@ public struct RoamingWalker: Sendable, Equatable {
             if canExit(side) {
                 return copy(x: nextX, phase: .leaving(side), steps: nextSteps, elapsed: elapsed + dt)
             }
-            // No neighbour that way: stop at the edge and turn around.
+            // No neighbour that way. A runner is cornered and stops; a walker turns around.
+            if isRunning {
+                return rest(x: min(max(nextX, 0), maxX), steps: nextSteps)
+            }
             return copy(x: min(max(nextX, 0), maxX), facesRight: !facesRight, steps: nextSteps, elapsed: elapsed + dt)
         }
         guard timeLeft - dt <= 0 else {
             return copy(x: nextX, steps: nextSteps, elapsed: elapsed + dt, timeLeft: timeLeft - dt)
         }
+        return rest(x: nextX, steps: nextSteps)
+    }
+
+    private func rest(x: Double, steps: Double) -> Self {
         let (pause, state) = Self.roll(randomState)
-        return copy(x: nextX, isWalking: false, steps: nextSteps, elapsed: 0,
+        return copy(x: x, isWalking: false, isRunning: false, steps: steps, elapsed: 0,
                     timeLeft: Self.minimumPause + pause * Self.pauseRange, randomState: state)
     }
 
@@ -127,23 +150,26 @@ public struct RoamingWalker: Sendable, Equatable {
                     timeLeft: Self.minimumWalk + walk * Self.walkRange, randomState: state)
     }
 
-    private func copy(x: Double? = nil, facesRight: Bool? = nil, isWalking: Bool? = nil, phase: Phase? = nil,
-                      steps: Double? = nil, elapsed: TimeInterval? = nil, timeLeft: TimeInterval? = nil,
+    private func copy(x: Double? = nil, facesRight: Bool? = nil, isWalking: Bool? = nil, isRunning: Bool? = nil,
+                      phase: Phase? = nil, steps: Double? = nil, elapsed: TimeInterval? = nil, timeLeft: TimeInterval? = nil,
                       randomState: UInt64? = nil) -> Self {
         Self(id: id, kind: kind, x: x ?? self.x, yFraction: yFraction, facesRight: facesRight ?? self.facesRight,
-             isWalking: isWalking ?? self.isWalking, phase: phase ?? self.phase, steps: steps ?? self.steps,
+             isWalking: isWalking ?? self.isWalking, isRunning: isRunning ?? self.isRunning,
+             phase: phase ?? self.phase, steps: steps ?? self.steps,
              elapsed: elapsed ?? self.elapsed, timeLeft: timeLeft ?? self.timeLeft,
              randomState: randomState ?? self.randomState)
     }
 
     private init(id: String, kind: RoamingKind, x: Double, yFraction: Double, facesRight: Bool, isWalking: Bool,
-                 phase: Phase, steps: Double, elapsed: TimeInterval, timeLeft: TimeInterval, randomState: UInt64) {
+                 isRunning: Bool, phase: Phase, steps: Double, elapsed: TimeInterval, timeLeft: TimeInterval,
+                 randomState: UInt64) {
         self.id = id
         self.kind = kind
         self.x = x
         self.yFraction = yFraction
         self.facesRight = facesRight
         self.isWalking = isWalking
+        self.isRunning = isRunning
         self.phase = phase
         self.steps = steps
         self.elapsed = elapsed
