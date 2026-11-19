@@ -42,7 +42,8 @@ public struct MascotFling: Sendable, Equatable {
     }
 
     public var pose: MascotPose {
-        MascotPose(x: x, facesRight: vx >= 0, isWalking: false, isPickedUp: true, steps: 0, elapsed: elapsed)
+        MascotPose(x: x, facesRight: vx >= 0, isWalking: false, isPickedUp: true, isFlying: true, steps: 0,
+                   elapsed: elapsed)
     }
 
     /// - Parameters:

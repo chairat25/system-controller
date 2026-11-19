@@ -39,6 +39,8 @@ rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp "$BIN_DIR/SoundControl" "$APP/Contents/MacOS/SoundControl"
 sed -e "s/__VERSION__/$VERSION/" -e "s/__BUILD__/$BUILD_NUMBER/" scripts/Info.plist > "$APP/Contents/Info.plist"
+# Rendered mascot sprite sheets (made by Art/mascots/build_mascots.py in Blender).
+cp -R "$ROOT/Resources/Mascots" "$APP/Contents/Resources/Mascots"
 
 echo "→ Rendering icon"
 ICONSET="$ROOT/build/AppIcon.iconset"
