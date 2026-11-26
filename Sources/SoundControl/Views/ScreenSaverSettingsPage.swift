@@ -1,7 +1,8 @@
 import SwiftUI
 import SoundControlCore
 
-/// The Screen Saver tab's settings page: dimming, what stays lit, the start shortcut and pinned sessions.
+/// The Screen Saver tab's settings page: background, mascot, widgets and their layout, the title, dimming,
+/// what stays lit, the start shortcut and pinned sessions.
 struct ScreenSaverSettingsPage: View {
     @Environment(AppModel.self) private var model
 
@@ -9,23 +10,43 @@ struct ScreenSaverSettingsPage: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.section) {
-            PopoverSection("Background") {
+            PopoverSection(L("Background")) {
                 BackgroundControls(settings: settings,
                                    update: model.updateScreenSaver,
                                    onChoosePhoto: model.chooseScreenSaverBackgroundImage,
                                    onClearPhoto: model.clearScreenSaverBackgroundImage)
             }
-            PopoverSection("Mascot") {
-                MascotControls(settings: settings, update: model.updateScreenSaver)
+            PopoverSection(L("Mascot")) {
+                MascotControls(settings: settings, update: model.updateScreenSaver,
+                               appSettings: model.appSettings,
+                               updateApp: model.updateAppSettings)
             }
-            PopoverSection("Display Dimming") {
+            PopoverSection(L("Widgets")) {
+                WidgetToggles(settings: settings, update: model.updateScreenSaver)
+            }
+            PopoverSection(L("Layout & Position")) {
+                SessionsCornerRow(settings: settings, update: model.updateScreenSaver)
+                Footnote("Drag widgets on the screen saver to arrange and stack them.")
+                WidgetLayoutResetButton(settings: settings, update: model.updateScreenSaver)
+                    .font(.caption)
+                if settings.showsSessions {
+                    Footnote("Click a session chip on the screen saver to watch it live.")
+                }
+            }
+            PopoverSection(L("Title")) {
+                TitleControls(settings: settings, update: model.updateScreenSaver)
+            }
+            PopoverSection(L("Widget Size")) {
+                WidgetSizeControls(settings: settings, update: model.updateScreenSaver)
+            }
+            PopoverSection(L("Display Dimming")) {
                 DimmingControls(settings: settings, update: model.updateScreenSaver)
             }
-            PopoverSection("Stays Bright") {
+            PopoverSection(L("Stays Bright")) {
                 StayLitControls(settings: settings, update: model.updateScreenSaver)
             }
             Footnote("Tip: on the screen saver, swipe two fingers right to change dimming, or left to change what shows, and see the result right there.")
-            PopoverSection("Activation Key") {
+            PopoverSection(L("Activation Key")) {
                 SettingRow("Start screen saver", systemImage: "keyboard") {
                     ShortcutRecorder(shortcut: settings.shortcut,
                                      onChange: { value in model.updateScreenSaver { $0.withShortcut(value) } },
@@ -36,7 +57,7 @@ struct ScreenSaverSettingsPage: View {
                 }
             }
             if settings.showsSessions, !model.sessions.board.sessions.isEmpty {
-                PopoverSection("Pinned Sessions") { pins }
+                PopoverSection(L("Pinned Sessions")) { pins }
             }
         }
     }

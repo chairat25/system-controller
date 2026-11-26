@@ -332,14 +332,14 @@ private struct KeyboardLockView: View {
                 Image(systemName: "keyboard.badge.ellipsis")
                     .font(.system(size: 64, weight: .semibold))
                     .foregroundStyle(Theme.accent)
-                Text("Keyboard locked").font(.largeTitle.weight(.bold))
-                Text("Wipe away — keys do nothing until you unlock.")
+                Text(L("Keyboard locked")).font(.largeTitle.weight(.bold))
+                Text(L("Wipe away — keys do nothing until you unlock."))
                     .font(.title3)
                     .foregroundStyle(.secondary)
                 TimedHoldButton(onUnlock: onUnlock)
                     .padding(.top, 8)
                 TimelineView(.periodic(from: lock.lockedAt, by: 1)) { context in
-                    Text("Unlocks by itself in \(Self.format(lock.remaining(at: context.date)))")
+                    Text(L("Unlocks by itself in %@", Self.format(lock.remaining(at: context.date))))
                         .font(.callout.monospacedDigit())
                         .foregroundStyle(.secondary)
                 }
@@ -379,7 +379,7 @@ private struct OwnerUnlockButton: View {
         Button {
             onTap()
         } label: {
-            Label("Unlock as owner", systemImage: "touchid")
+            Label(L("Unlock as owner"), systemImage: "touchid")
                 .font(.headline)
                 .padding(.horizontal, 28)
                 .padding(.vertical, 14)

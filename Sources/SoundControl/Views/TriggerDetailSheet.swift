@@ -14,34 +14,34 @@ struct TriggerDetailSheet: View {
             HStack(spacing: 12) {
                 SymbolTile(symbol: info.symbol, isActive: setting.isEnabled, size: 44)
                 VStack(alignment: .leading) {
-                    Text(info.title).font(.title2.weight(.semibold))
-                    Text(info.detail).foregroundStyle(.secondary)
+                    Text(L(info.title)).font(.title2.weight(.semibold))
+                    Text(L(info.detail)).foregroundStyle(.secondary)
                 }
                 Spacer()
-                Toggle("On", isOn: Binding(get: { setting.isEnabled }, set: { model.setTrigger(trigger, enabled: $0) }))
+                Toggle(L("On"), isOn: Binding(get: { setting.isEnabled }, set: { model.setTrigger(trigger, enabled: $0) }))
                     .toggleStyle(.switch)
                     .tint(Theme.accent)
             }
 
-            Picker("Sound source", selection: Binding(
+            Picker(L("Sound source"), selection: Binding(
                 get: { setting.followsPack },
                 set: { follow in
                     model.setSounds(follow ? [] : SoundResolver.candidates(for: trigger, in: model.config), for: trigger)
                 }
             )) {
-                Text("Follow pack (\(SoundResolver.packName(model.config.activePack, in: model.config)))").tag(true)
-                Text("My own sounds").tag(false)
+                Text(L("Follow pack (%@)", SoundResolver.packName(model.config.activePack, in: model.config))).tag(true)
+                Text(L("My own sounds")).tag(false)
             }
             .pickerStyle(.radioGroup)
 
             soundList(setting: setting)
 
             HStack(spacing: 20) {
-                Picker("Playback", selection: Binding(
+                Picker(L("Playback"), selection: Binding(
                     get: { setting.playback },
                     set: { mode in model.update { $0.updatingTrigger(trigger) { $0.withPlayback(mode) } } }
                 )) {
-                    ForEach(PlaybackMode.allCases, id: \.self) { Text($0.title).tag($0) }
+                    ForEach(PlaybackMode.allCases, id: \.self) { Text(L($0.title)).tag($0) }
                 }
                 .frame(width: 240)
                 HStack {
@@ -58,11 +58,11 @@ struct TriggerDetailSheet: View {
                 Button {
                     model.preview(trigger)
                 } label: {
-                    Label("Test trigger", systemImage: "play.fill")
+                    Label(L("Test trigger"), systemImage: "play.fill")
                 }
-                Text("Cooldown \(info.cooldown.formatted()) s").font(.caption).foregroundStyle(.secondary)
+                Text(L("Cooldown %@ s", info.cooldown.formatted())).font(.caption).foregroundStyle(.secondary)
                 Spacer()
-                Button("Done") { dismiss() }.keyboardShortcut(.defaultAction)
+                Button(L("Done")) { dismiss() }.keyboardShortcut(.defaultAction)
             }
         }
         .padding(24)
@@ -74,7 +74,7 @@ struct TriggerDetailSheet: View {
         let candidates = SoundResolver.candidates(for: trigger, in: model.config)
         Card {
             if candidates.isEmpty {
-                Text("No sounds yet. Add one below.").foregroundStyle(.secondary).rowPadding()
+                Text(L("No sounds yet. Add one below.")).foregroundStyle(.secondary).rowPadding()
             }
             ForEach(Array(candidates.enumerated()), id: \.offset) { index, ref in
                 if index > 0 { Divider() }
@@ -91,7 +91,7 @@ struct TriggerDetailSheet: View {
                         }
                         .buttonStyle(.plain)
                         .foregroundStyle(.secondary)
-                        .help("Remove")
+                        .help(L("Remove"))
                     }
                 }
                 .rowPadding()
@@ -104,10 +104,10 @@ struct TriggerDetailSheet: View {
                     model.preview(ref, volume: setting.volume)
                 }
             } label: {
-                Label("Add sound", systemImage: "plus")
+                Label(L("Add sound"), systemImage: "plus")
             }
             .fixedSize()
-            Text("Add several sounds to rotate or shuffle between them each time the trigger fires.")
+            Text(L("Add several sounds to rotate or shuffle between them each time the trigger fires."))
                 .font(.caption).foregroundStyle(.secondary)
         }
     }

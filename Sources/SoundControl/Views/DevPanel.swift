@@ -16,7 +16,7 @@ struct DevPanel: View {
     }
 
     private var automation: some View {
-        PopoverSection("Automation") {
+        PopoverSection(L("Automation")) {
             SettingToggle(title: "Auto /compact when idle", systemImage: "arrow.down.right.and.arrow.up.left",
                           isOn: model.idleCompact.isEnabled,
                           onChange: { value in model.updateIdleCompact { $0.withEnabled(value) } })
@@ -25,7 +25,7 @@ struct DevPanel: View {
                 set: { value in model.updateIdleCompact { $0.withIdleMinutes(value) } }),
                     in: IdleCompactSettings.minimumMinutes...IdleCompactSettings.maximumMinutes) {
                 SettingRow("Idle time", systemImage: "timer") {
-                    Text("\(model.idleCompact.idleMinutes) min").font(.callout.monospacedDigit()).foregroundStyle(.secondary)
+                    Text(L("%@ min", model.idleCompact.idleMinutes)).font(.callout.monospacedDigit()).foregroundStyle(.secondary)
                 }
             }
             .disabled(!model.idleCompact.isEnabled)
@@ -39,7 +39,7 @@ struct DevPanel: View {
     }
 
     private var usage: some View {
-        PopoverSection("Session & Usage") {
+        PopoverSection(L("Session & Usage")) {
             quotaStatus
             Divider()
             SettingToggle(title: "Hand off and /compact near the limit", systemImage: "arrow.triangle.branch",
@@ -68,13 +68,13 @@ struct DevPanel: View {
             let percent = Int(quota.remainingPercent.rounded())
             VStack(alignment: .leading, spacing: Spacing.micro) {
                 HStack {
-                    Text("5-hour window").font(.callout)
+                    Text(L("5-hour window")).font(.callout)
                     Spacer()
-                    Text("\(percent)% left").font(.callout.monospacedDigit().weight(.medium))
+                    Text(L("%@% left", percent)).font(.callout.monospacedDigit().weight(.medium))
                 }
                 ProgressView(value: quota.remainingPercent, total: 100)
                     .tint(percent <= model.limitGuardSettings.thresholdPercent ? Theme.warning : Theme.accent)
-                Text("Resets at \(quota.resetsAt.formatted(.dateTime.hour().minute()))")
+                Text(L("Resets at %@", quota.resetsAt.formatted(.dateTime.hour().minute())))
                     .font(.caption.monospacedDigit()).foregroundStyle(.secondary)
             }
         } else if let problem = model.sessions.quotaProblem {
@@ -86,7 +86,7 @@ struct DevPanel: View {
 
     /// Typing into and reading terminals needs the Automation permission, asked for when the app starts.
     private var terminalAccess: some View {
-        PopoverSection("Terminal Access") {
+        PopoverSection(L("Terminal Access")) {
             ForEach(model.terminalPermissions.installed) { terminal in
                 let state = model.terminalPermissions.states[terminal.bundleID] ?? .notRunning
                 SettingRow(terminal.name, systemImage: "apple.terminal") {
@@ -105,11 +105,11 @@ struct DevPanel: View {
     }
 
     private var diagnostics: some View {
-        PopoverSection("Diagnostics") {
+        PopoverSection(L("Diagnostics")) {
             HStack {
-                Button("Check again") { model.terminalPermissions.refresh() }
+                Button(L("Check again")) { model.terminalPermissions.refresh() }
                 if model.terminalPermissions.hasDenied {
-                    Button("Open Automation Settings") { AutomationAccess.openSettings() }
+                    Button(L("Open Automation Settings")) { AutomationAccess.openSettings() }
                 }
                 Spacer()
             }

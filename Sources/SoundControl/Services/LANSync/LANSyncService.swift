@@ -14,6 +14,9 @@ final class LANSyncService {
         var screenSaverName: () -> String?
         var screenSaverApplied: (String) -> Void
         var mascot: () -> Mascot
+        var throwFrameRate: () -> ThrowFrameRate
+        var mascotStyle: () -> MascotStyle
+        var budget: () -> ResourceBudget
     }
 
     private static let maintenanceInterval: TimeInterval = 10
@@ -24,6 +27,17 @@ final class LANSyncService {
     private(set) var settings: LANSyncSettings
     /// Paired Macs with a live connection.
     private(set) var connectedPeerIDs: Set<String> = []
+    /// What each connected computer said about itself in its hello: version and platform, nil when it is too old
+    /// to say. The UI warns when they differ from this Mac's, since a visitor may then not look right.
+    private(set) var peerVersions: [String: PeerVersion] = [:]
+
+    struct PeerVersion: Equatable {
+        let appVersion: String?
+        let platform: String?
+    }
+
+    /// This build's version, sent in every hello.
+    static let appVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "dev"
     /// Last problem worth showing: a settings or Keychain failure.
     private(set) var problem: String?
     @ObservationIgnored let pairing: LANSyncPairing
@@ -42,6 +56,8 @@ final class LANSyncService {
     /// Connections still waiting for the hello, with the time they started.
     @ObservationIgnored private var pending: [ObjectIdentifier: (connection: SyncConnection, since: Date)] = [:]
     @ObservationIgnored private var listenerPeerIDs: Set<String> = []
+    /// Pairing keys read from disk once and kept here; the listener check runs every few seconds.
+    @ObservationIgnored private var peerKeys: [String: Data] = [:]
     @ObservationIgnored private var maintenance: Timer?
 
     init() {
@@ -65,11 +81,32 @@ final class LANSyncService {
         mascots.handOff = { [weak self] object, side in self?.handOff(object, to: side) }
     }
 
+    /// State for a layout-check script (see `UISnapshot`).
+    var debugSummary: [String] {
+        ["device \(deviceID)", "connected \(connectedPeerIDs.sorted())",
+         "paired \(settings.pairedPeers.map { "\($0.name)/\($0.id)/\($0.side?.rawValue ?? "none")" })",
+         "versions \(peerVersions.map { "\($0.key)=\($0.value.appVersion ?? "?")/\($0.value.platform ?? "?")" })",
+         "pairing \(pairing.state) window=\(pairing.isWindowOpen) nearby=\(pairing.nearby.map(\.name))"]
+            + mascots.debugSummary
+    }
+
+    /// Layout-check scripts: sends one of this Mac's own mascots over the edge right away.
+    func debugPushMascot(to side: PeerSide) { mascots.debugPush(to: side) }
+
+    /// The screen saver covers the desktop: the mascots stop moving until it closes.
+    func setDesktopPaused(_ paused: Bool) { mascots.setPaused(paused) }
+
+    /// The owner changed the size, number or colour of this Mac's mascots.
+    func mascotStyleChanged() { mascots.applyStyle() }
+
     func start(hooks: Hooks) {
         guard !isStarted else { return }
         isStarted = true
         self.hooks = hooks
         mascots.mascot = hooks.mascot
+        mascots.throwFrameRate = hooks.throwFrameRate
+        mascots.style = hooks.mascotStyle
+        mascots.budget = hooks.budget
         mascots.homeID = deviceID
         wallpaper = WallpaperSyncer(link: WallpaperSyncer.Link(
             peers: { [weak self] in self?.connectedPeers(wanting: \.wallpaper) ?? [] },
@@ -112,6 +149,7 @@ final class LANSyncService {
         connections[peerID]?.close()
         dropConnection(peerID)
         PeerKeychain.delete(peerID)
+        peerKeys[peerID] = nil
         update { $0.removing(peerID) }
     }
 
@@ -123,6 +161,9 @@ final class LANSyncService {
     private func finishPairing(_ result: LANPairingSession.Result) {
         do {
             try PeerKeychain.save(result.key, for: result.peerID)
+            peerKeys[result.peerID] = result.key
+            // A Mac paired again keeps its id but brings a new key: the listener must take it.
+            listenerPeerIDs = []
         } catch {
             Self.logger.error("Keychain save failed: \(error.localizedDescription, privacy: .public)")
             problem = "Could not store the pairing key: \(error.localizedDescription)"
@@ -145,9 +186,16 @@ final class LANSyncService {
         connectToPairedMacs()
     }
 
+    private func key(for peerID: String) -> Data? {
+        if let cached = peerKeys[peerID] { return cached }
+        let loaded = PeerKeychain.load(peerID)
+        peerKeys[peerID] = loaded
+        return loaded
+    }
+
     private func ensureSyncListener() {
         let keys = settings.pairedPeers.compactMap { peer in
-            PeerKeychain.load(peer.id).map { LANSyncTransport.PeerKey(peerID: peer.id, key: $0) }
+            key(for: peer.id).map { LANSyncTransport.PeerKey(peerID: peer.id, key: $0) }
         }
         let ids = Set(keys.map(\.peerID))
         guard !transport.hasSyncListener || ids != listenerPeerIDs else { return }
@@ -212,7 +260,7 @@ final class LANSyncService {
         for peer in settings.pairedPeers where deviceID < peer.id
             && connections[peer.id] == nil && !connecting.contains(peer.id) {
             guard let mac = discovered.first(where: { !$0.isPairing && $0.deviceID == peer.id }),
-                  let key = PeerKeychain.load(peer.id) else { continue }
+                  let key = key(for: peer.id) else { continue }
             let connection = transport.connectSynced(to: mac, key: key)
             connection.peerID = peer.id
             adopt(connection)
@@ -244,16 +292,24 @@ final class LANSyncService {
 
     private func sendHello(on connection: SyncConnection) {
         connection.send(.hello(deviceID: deviceID, name: deviceName, wantsWallpaper: settings.isWallpaperSyncOn,
-                               wantsRoaming: settings.isMascotRoamingOn))
+                               wantsRoaming: settings.isMascotRoamingOn, appVersion: Self.appVersion,
+                               platform: "macos"))
     }
 
     private func receive(_ message: SyncMessage, on connection: SyncConnection) {
         switch message {
-        case let .hello(id, _, wantsWallpaper, wantsRoaming):
+        case let .hello(id, _, wantsWallpaper, wantsRoaming, appVersion, platform):
             greeted(id, wantsWallpaper: wantsWallpaper, wantsRoaming: wantsRoaming, on: connection)
+            guard connection.peerID == id else { return }
+            let version = PeerVersion(appVersion: appVersion, platform: platform)
+            if peerVersions[id] != version { peerVersions[id] = version }
         case .roamingHandoff(let object):
-            guard let id = connection.peerID, connections[id] === connection, settings.isMascotRoamingOn else { return }
-            mascots.receive(object)
+            guard let id = connection.peerID, connections[id] === connection else { return }
+            // Never let a mascot vanish on the way: if it cannot stay here, it goes back to where it came from.
+            if !settings.isMascotRoamingOn || !mascots.receive(object) { connection.send(.roamingReturn(object)) }
+        case .roamingReturn(let object):
+            guard let id = connection.peerID, connections[id] === connection else { return }
+            mascots.returned(object, from: settings.peer(id: id)?.side ?? .right)
         default:
             guard let id = connection.peerID, connections[id] === connection else { return }
             wallpaper?.handle(message, from: id)
@@ -282,6 +338,7 @@ final class LANSyncService {
     private func dropConnection(_ id: String) {
         connections[id] = nil
         peerWants[id] = nil
+        peerVersions[id] = nil
         mascots.peerLeft(id)
         wallpaper?.peerDisconnected(id)
         refreshConnected()

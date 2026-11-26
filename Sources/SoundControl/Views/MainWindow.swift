@@ -32,19 +32,13 @@ struct MainWindow: View {
         }
         .tint(Theme.accent)
         .frame(minWidth: 860, minHeight: 560)
-        // Show in the Dock and app switcher only while the window is open.
-        .onAppear {
-            NSApp.setActivationPolicy(.regular)
-            NSApp.activate()
-        }
-        .onDisappear { NSApp.setActivationPolicy(.accessory) }
     }
 
     private var sidebar: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 8) {
                 Image(systemName: "waveform.circle.fill").font(.title).foregroundStyle(Theme.accent)
-                Text("Sound Control").font(.title3.weight(.semibold))
+                Text(L("Sound Control")).font(.title3.weight(.semibold))
             }
             .padding(.horizontal, 14)
             .padding(.bottom, 10)
@@ -68,15 +62,14 @@ struct MainWindow: View {
                     .font(.caption).foregroundStyle(.secondary).lineLimit(1)
             }
             Spacer()
-            Toggle("Listening", isOn: Binding(get: { model.config.isListening },
+            Toggle(L("Listening"), isOn: Binding(get: { model.config.isListening },
                                      set: { value in model.update { $0.withListening(value) } }))
                 .toggleStyle(.switch)
                 .labelsHidden()
                 .tint(Theme.accent)
         }
         .padding(Spacing.control)
-        .background(Theme.groupFill, in: RoundedRectangle(cornerRadius: Theme.groupRadius, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: Theme.groupRadius, style: .continuous).strokeBorder(Theme.hairline))
+        .glassSurface()
         .padding(10)
     }
 
@@ -96,12 +89,12 @@ struct MainWindow: View {
         if let message = model.alertMessage {
             HStack(alignment: .top) {
                 Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(Theme.warning)
-                Text(message).font(.callout).textSelection(.enabled)
+                Text(L(message)).font(.callout).textSelection(.enabled)
                 Spacer()
                 Button { model.alertMessage = nil } label: { Image(systemName: "xmark") }.buttonStyle(.plain)
             }
             .padding(12)
-            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10))
+            .glassSurface(radius: 10)
             .padding(16)
             .transition(.move(edge: .bottom).combined(with: .opacity))
         }

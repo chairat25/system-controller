@@ -58,7 +58,7 @@ struct ScreenSaverDrawers: View {
                     BackgroundControls(settings: settings, update: link.update)
                     Divider()
                     SectionHeader("Mascot")
-                    Toggle("Hide mascot", isOn: Binding(
+                    Toggle(L("Hide mascot"), isOn: Binding(
                         get: { settings.activeMascot == .none },
                         set: { isHidden in link.update { $0.withMascotHidden(isHidden) } }
                     ))
@@ -79,13 +79,13 @@ struct ScreenSaverDrawers: View {
                                       @ViewBuilder content: () -> Content) -> some View {
         VStack(alignment: .leading, spacing: 14) {
             HStack {
-                Label(title, systemImage: systemImage).font(.headline)
+                Label(L(title), systemImage: systemImage).font(.headline)
                 Spacer()
                 Button { state.drawer = .closed } label: {
                     Image(systemName: "xmark.circle.fill").font(.title3).foregroundStyle(.secondary)
                 }
                 .buttonStyle(.plain)
-                .help("Close")
+                .help(L("Close"))
             }
             ScrollView {
                 VStack(alignment: .leading, spacing: 12) { content() }
@@ -94,9 +94,9 @@ struct ScreenSaverDrawers: View {
             }
             .scrollBounceBehavior(.basedOnSize)
             Divider()
-            Toggle("Show the dimmed look while open", isOn: Binding(get: { dimmer.isPreviewWanted },
+            Toggle(L("Show the dimmed look while open"), isOn: Binding(get: { dimmer.isPreviewWanted },
                                                                    set: { dimmer.isPreviewWanted = $0 }))
-            Text("Swipe back or click outside to close. Changes are saved right away.")
+            Text(L("Swipe back or click outside to close. Changes are saved right away."))
                 .font(.caption).foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
         }

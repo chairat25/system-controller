@@ -30,7 +30,7 @@ struct DimmingControls: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Toggle("Dim the screen when left alone", isOn: Binding(
+            Toggle(L("Dim the screen when left alone"), isOn: Binding(
                 get: { settings.isDimEnabled },
                 set: { value in update { $0.withDimEnabled(value) } }))
             Group {
@@ -39,7 +39,7 @@ struct DimmingControls: View {
                 presetStepper("Fade out over", value: settings.fadeSeconds, presets: Self.fadeChoices,
                               label: { $0 == 0 ? "Instantly" : Self.duration($0) }) { value in update { $0.withFade(seconds: value) } }
                 VStack(alignment: .leading, spacing: 2) {
-                    LabeledContent("Darkest level", value: Self.levelLabel(settings.dimLevel))
+                    LabeledContent(L("Darkest level"), value: Self.levelLabel(settings.dimLevel))
                     Slider(value: Binding(get: { settings.dimLevel },
                                           set: { value in update { $0.withDimLevel(value) } }), in: 0...1)
                 }
@@ -66,7 +66,7 @@ struct DimmingControls: View {
     }
 
     private static func levelLabel(_ level: Double) -> String {
-        level == 0 ? "Fully dark" : "\(Int((level * 100).rounded()))%"
+        level == 0 ? L("Fully dark") : "\(Int((level * 100).rounded()))%"
     }
 }
 
@@ -87,7 +87,7 @@ struct StayLitControls: View {
                            setOn: { value in update { $0.withMascotBright(value) } },
                            setLevel: { value in update { $0.withMascotLevel(value) } })
             }
-            Text("Ticked items keep this brightness while the rest of the screen dims.")
+            Text(L("Ticked items keep this brightness while the rest of the screen dims."))
                 .font(.caption).foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
         }
@@ -112,9 +112,9 @@ struct WidgetToggles: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.control) {
-            widgetToggle("Clock", systemImage: "clock", widget: .clock)
-            widgetToggle("Calendar", systemImage: "calendar", widget: .calendar)
-            widgetToggle("Claude usage", systemImage: "sparkle", widget: .claudeUsage)
+            widgetToggle(L("Clock"), systemImage: "clock", widget: .clock)
+            widgetToggle(L("Calendar"), systemImage: "calendar", widget: .calendar)
+            widgetToggle(L("Claude usage"), systemImage: "sparkle", widget: .claudeUsage)
             SettingToggle(title: "Claude sessions", systemImage: "terminal", isOn: settings.showsSessions,
                           onChange: { value in update { $0.withShowsSessions(value) } })
         }
@@ -151,7 +151,7 @@ struct WidgetLayoutResetButton: View {
             Button {
                 update { $0.resetWidgetLayout() }
             } label: {
-                Label("Reset widget positions", systemImage: "arrow.counterclockwise")
+                Label(L("Reset widget positions"), systemImage: "arrow.counterclockwise")
             }
         }
     }
@@ -161,6 +161,9 @@ struct WidgetLayoutResetButton: View {
 struct MascotControls: View {
     let settings: ScreenSaverSettings
     let update: ScreenSaverUpdate
+    /// Kept on this Mac only, not in the synced screen saver settings.
+    let appSettings: AppSettings
+    let updateApp: (@escaping (AppSettings) -> AppSettings) -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.control) {
@@ -177,6 +180,123 @@ struct MascotControls: View {
                 update { $0.withMascot(mascot) }
             }
             .opacity(settings.activeMascot == .none ? 0.55 : 1)
+            VStack(alignment: .leading, spacing: Spacing.control) {
+                MascotStyleControls(style: appSettings.mascotStyle) { style in
+                    updateApp { $0.withMascotStyle(style) }
+                }
+                ThrowFrameRatePicker(selection: appSettings.throwFrameRate) { rate in
+                    updateApp { $0.withThrowFrameRate(rate) }
+                }
+            }
+            .disabled(settings.activeMascot == .none)
+            .opacity(settings.activeMascot == .none ? 0.55 : 1)
+        }
+    }
+}
+
+/// Size, number and colour of this Mac's desktop mascots. Each change shows on the desktop at once.
+struct MascotStyleControls: View {
+    let style: MascotStyle
+    let onChange: (MascotStyle) -> Void
+
+    private func with(scale: Double? = nil, count: Int? = nil, hue: Double? = nil) -> MascotStyle {
+        MascotStyle(scale: scale ?? style.scale, count: count ?? style.count, hue: hue ?? style.hue)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Spacing.control) {
+            VStack(alignment: .leading, spacing: Spacing.micro) {
+                SettingRow("Mascot size", detail: "This Mac only", systemImage: "arrow.up.left.and.arrow.down.right") {
+                    Text(String(format: "%.2f×", style.scale)).font(.callout.monospacedDigit()).foregroundStyle(.secondary)
+                }
+                Slider(value: Binding(get: { style.scale }, set: { onChange(with(scale: $0)) }),
+                       in: MascotStyle.scaleRange, step: 0.05)
+                    .labelsHidden()
+                    .accessibilityLabel(L("Mascot size"))
+            }
+            SettingRow("How many", detail: "More of the same animal on the desktop", systemImage: "square.on.square") {
+                HStack(spacing: Spacing.related) {
+                    Text("\(style.count)").font(.callout.monospacedDigit())
+                    Stepper(L("How many"), value: Binding(get: { style.count }, set: { onChange(with(count: $0)) }),
+                            in: MascotStyle.countRange)
+                        .labelsHidden()
+                }
+            }
+            VStack(alignment: .leading, spacing: Spacing.micro) {
+                SettingRow("Color", detail: "Turn the colors of the animal around", systemImage: "paintpalette") {
+                    Button(L("Original")) { onChange(with(hue: 0)) }
+                        .controlSize(.small)
+                        .disabled(!style.isRecoloured)
+                }
+                HueSlider(hue: style.hue) { onChange(with(hue: $0)) }
+            }
+        }
+    }
+}
+
+/// A slider whose track is the colour wheel, so the colour you want sits where you put the thumb.
+struct HueSlider: View {
+    let hue: Double
+    let onChange: (Double) -> Void
+
+    private static let trackHeight: CGFloat = 10
+    private static let thumb: CGFloat = 18
+
+    private static let wheel = Gradient(colors: stride(from: 0.0, through: 1.0, by: 1.0 / 12).map {
+        Color(hue: $0, saturation: 0.85, brightness: 0.95)
+    })
+
+    var body: some View {
+        GeometryReader { geometry in
+            let travel = max(geometry.size.width - Self.thumb, 1)
+            ZStack(alignment: .leading) {
+                Capsule()
+                    .fill(LinearGradient(gradient: Self.wheel, startPoint: .leading, endPoint: .trailing))
+                    .frame(height: Self.trackHeight)
+                    .overlay(Capsule().strokeBorder(.white.opacity(0.25)))
+                Circle()
+                    .fill(Color(hue: hue / 360, saturation: hue == 0 ? 0 : 0.85, brightness: 0.95))
+                    .overlay(Circle().strokeBorder(.white, lineWidth: 2))
+                    .shadow(color: .black.opacity(0.35), radius: 2, y: 1)
+                    .frame(width: Self.thumb, height: Self.thumb)
+                    .offset(x: travel * hue / 360)
+            }
+            .frame(maxHeight: .infinity)
+            .contentShape(Rectangle())
+            .gesture(DragGesture(minimumDistance: 0).onChanged { value in
+                let fraction = min(max((value.location.x - Self.thumb / 2) / travel, 0), 1)
+                onChange(fraction * 359)
+            })
+        }
+        .frame(height: Self.thumb + 4)
+        .accessibilityElement()
+        .accessibilityLabel(L("Color"))
+        .accessibilityValue("\(Int(hue))°")
+        .accessibilityAdjustableAction { direction in
+            switch direction {
+            case .increment: onChange(min(hue + 15, 359))
+            case .decrement: onChange(max(hue - 15, 0))
+            @unknown default: break
+            }
+        }
+    }
+}
+
+/// Frame rate of a held or thrown mascot, as a dropdown. Applies to this Mac only.
+struct ThrowFrameRatePicker: View {
+    let selection: ThrowFrameRate
+    let onSelect: (ThrowFrameRate) -> Void
+
+    var body: some View {
+        SettingRow("Throw frame rate", detail: "This Mac only", systemImage: "speedometer") {
+            Picker(L("Throw frame rate"), selection: Binding(get: { selection }, set: onSelect)) {
+                ForEach(ThrowFrameRate.allCases) { rate in
+                    Text(L(rate.title)).tag(rate)
+                }
+            }
+            .pickerStyle(.menu)
+            .labelsHidden()
+            .frame(maxWidth: 140)
         }
     }
 }
@@ -193,12 +313,11 @@ struct MascotGrid: View {
             ForEach(Mascot.allCases) { mascot in
                 let isSelected = mascot == selection
                 Button { onSelect(mascot) } label: {
-                    Text(mascot.title)
+                    Text(L(mascot.title))
                         .font(.callout)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 6)
-                        .background(isSelected ? Theme.accent : Color.secondary.opacity(0.18),
-                                    in: RoundedRectangle(cornerRadius: 7, style: .continuous))
+                        .glassChip(isSelected: isSelected)
                         .foregroundStyle(isSelected ? Color.white : Color.primary)
                 }
                 .buttonStyle(.plain)
@@ -234,7 +353,7 @@ struct BackgroundControls: View {
                     } label: {
                         HStack(spacing: 5) {
                             swatch(for: background)
-                            Text(background.title)
+                            Text(L(background.title))
                                 .font(.caption)
                                 .lineLimit(1)
                                 .minimumScaleFactor(0.8)
@@ -242,8 +361,7 @@ struct BackgroundControls: View {
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 6)
                         .padding(.horizontal, 6)
-                        .background(isSelected ? Theme.accent : Color.secondary.opacity(0.18),
-                                    in: RoundedRectangle(cornerRadius: 7, style: .continuous))
+                        .glassChip(isSelected: isSelected)
                         .foregroundStyle(isSelected ? Color.white : Color.primary)
                     }
                     .buttonStyle(.plain)
@@ -262,10 +380,10 @@ struct BackgroundControls: View {
                         .lineLimit(1)
                     Spacer(minLength: Spacing.related)
                     if settings.customBackgroundName != nil, let onClearPhoto {
-                        Button("Remove", role: .destructive, action: onClearPhoto)
+                        Button(L("Remove"), role: .destructive, action: onClearPhoto)
                             .controlSize(.small)
                     }
-                    Button(settings.customBackgroundName == nil ? "Choose photo…" : "Change…", action: onChoosePhoto)
+                    Button(L(settings.customBackgroundName == nil ? "Choose photo…" : "Change…"), action: onChoosePhoto)
                         .controlSize(.small)
                 }
             }

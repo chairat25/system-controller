@@ -11,6 +11,12 @@ public enum MascotFace: Sendable, Equatable {
     case annoyed
     /// Had enough: runs away.
     case fleeing
+    /// Dozing off.
+    case sleepy
+    /// Playing or saying hello.
+    case happy
+    /// Close to a friend of its own kind.
+    case love
 }
 
 /// How a mascot feels about being clicked. Clicks close together build up from curious to annoyed, and enough of

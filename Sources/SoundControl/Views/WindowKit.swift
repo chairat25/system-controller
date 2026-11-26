@@ -14,7 +14,8 @@ struct WindowPage<Content: View>: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: WindowLayout.pageSpacing) { content }
+            // Lazy: a section below the fold (the Triggers page has dozens of rows) is built only when scrolled to.
+            LazyVStack(alignment: .leading, spacing: WindowLayout.pageSpacing) { content }
                 .padding(WindowLayout.pagePadding)
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
@@ -34,14 +35,13 @@ struct SearchField: View {
                 Button { text = "" } label: { Image(systemName: "xmark.circle.fill") }
                     .buttonStyle(.plain)
                     .foregroundStyle(.secondary)
-                    .help("Clear search")
-                    .accessibilityLabel("Clear search")
+                    .help(L("Clear search"))
+                    .accessibilityLabel(L("Clear search"))
             }
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 6)
-        .background(Theme.groupFill, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(Theme.hairline))
+        .glassSurface(radius: 8)
         .frame(minWidth: 160, maxWidth: WindowLayout.searchMaxWidth)
     }
 }
@@ -53,7 +53,7 @@ struct FilterSegment<Value: Hashable & RawRepresentable & CaseIterable>: View wh
     @Binding var selection: Value
 
     var body: some View {
-        Picker(title, selection: $selection) {
+        Picker(L(title), selection: $selection) {
             ForEach(Value.allCases, id: \.self) { Text($0.rawValue).tag($0) }
         }
         .pickerStyle(.segmented)
@@ -76,7 +76,7 @@ struct ListSectionHeader<Accessory: View>: View {
 
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: 6) {
-            Text(title).font(.subheadline.weight(.semibold))
+            Text(L(title)).font(.subheadline.weight(.semibold))
             if let count {
                 Text(count).font(.caption.monospacedDigit()).foregroundStyle(.secondary)
             }
@@ -120,15 +120,15 @@ struct EmptyState<Action: View>: View {
     var body: some View {
         VStack(spacing: Spacing.related) {
             Image(systemName: systemImage).font(.system(size: 30)).foregroundStyle(Theme.accent)
-            Text(title).font(.headline)
-            Text(message).font(.callout).foregroundStyle(.secondary).multilineTextAlignment(.center)
+            Text(L(title)).font(.headline)
+            Text(L(message)).font(.callout).foregroundStyle(.secondary).multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
             action.padding(.top, Spacing.micro)
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, Spacing.major + 8)
         .padding(.horizontal, Spacing.major)
-        .background(Theme.groupFill, in: RoundedRectangle(cornerRadius: Theme.cardRadius, style: .continuous))
+        .glassSurface(radius: Theme.cardRadius)
     }
 }
 
@@ -144,7 +144,7 @@ struct RowIconButton: View {
         }
         .buttonStyle(.plain)
         .foregroundStyle(.secondary)
-        .help(help)
-        .accessibilityLabel(help)
+        .help(L(help))
+        .accessibilityLabel(L(help))
     }
 }

@@ -162,15 +162,15 @@ struct ClaudeUsageWidget: View {
     }
 
     private var windowNote: Text? {
-        summary.windowResetsAt.map { Text("resets \($0, format: .dateTime.hour().minute())") }
+        summary.windowResetsAt.map { Text(L("resets %@", $0.formatted(.dateTime.hour().minute()))) }
     }
 
     private func usageRow(title: String, tokens: Int, replies: Int, note: Text?) -> some View {
         VStack(alignment: .leading, spacing: 2) {
-            Text(title).font(.caption).foregroundStyle(.secondary)
+            Text(L(title)).font(.caption).foregroundStyle(.secondary)
             HStack(alignment: .firstTextBaseline, spacing: 6) {
                 Text(ClaudeUsageSummary.format(tokens: tokens)).font(.title.weight(.semibold).monospacedDigit())
-                Text("tokens · \(replies) replies").font(.caption).foregroundStyle(.secondary)
+                Text(L("tokens · %@ replies", replies)).font(.caption).foregroundStyle(.secondary)
             }
             if let note { note.font(.caption).foregroundStyle(.secondary) }
         }
@@ -187,7 +187,7 @@ private struct WidgetCard<Content: View>: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Label(title, systemImage: symbol).font(.headline).foregroundStyle(Theme.accent)
+            Label(L(title), systemImage: symbol).font(.headline).foregroundStyle(Theme.accent)
             content
         }
         .padding(20)

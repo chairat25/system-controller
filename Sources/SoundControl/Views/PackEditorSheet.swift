@@ -13,8 +13,8 @@ struct PackEditorSheet: View {
             editor(pack)
         } else {
             VStack {
-                Text("This pack no longer exists.")
-                Button("Close") { dismiss() }
+                Text(L("This pack no longer exists."))
+                Button(L("Close")) { dismiss() }
             }
             .padding(40)
         }
@@ -24,23 +24,23 @@ struct PackEditorSheet: View {
         VStack(alignment: .leading, spacing: 14) {
             HStack(spacing: 12) {
                 SymbolTile(symbol: "theatermasks.fill", size: 44)
-                TextField("Pack name", text: Binding(
+                TextField(L("Pack name"), text: Binding(
                     get: { pack.name },
                     set: { name in model.updatePack(packID) { $0.renamed(String(name.prefix(40))) } }
                 ))
                 .textFieldStyle(.roundedBorder)
                 .font(.title3)
-                Picker("Base", selection: Binding(
+                Picker(L("Base"), selection: Binding(
                     get: { pack.base },
                     set: { base in model.updatePack(packID) { $0.rebased(on: base) } }
                 )) {
-                    ForEach(BuiltInPack.allCases, id: \.self) { Text($0.title).tag($0) }
+                    ForEach(BuiltInPack.allCases, id: \.self) { Text(L($0.title)).tag($0) }
                 }
                 .frame(width: 200)
             }
-            Text("Triggers without an override use the base pack. Pick a sound to override one.")
+            Text(L("Triggers without an override use the base pack. Pick a sound to override one."))
                 .font(.caption).foregroundStyle(.secondary)
-            TextField("Search triggers", text: $search).textFieldStyle(.roundedBorder)
+            TextField(L("Search triggers"), text: $search).textFieldStyle(.roundedBorder)
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 14) {
@@ -61,10 +61,10 @@ struct PackEditorSheet: View {
 
             HStack {
                 if model.config.activePack != .custom(packID) {
-                    Button("Use this pack") { model.update { $0.selectingPack(.custom(packID)) } }
+                    Button(L("Use this pack")) { model.update { $0.selectingPack(.custom(packID)) } }
                 }
                 Spacer()
-                Button("Done") { dismiss() }.keyboardShortcut(.defaultAction)
+                Button(L("Done")) { dismiss() }.keyboardShortcut(.defaultAction)
             }
         }
         .padding(22)
@@ -76,10 +76,10 @@ struct PackEditorSheet: View {
         let sounds = override.isEmpty ? pack.base.sounds(for: info.motif) : override
         return HStack(spacing: 10) {
             SymbolTile(symbol: info.symbol, isActive: !override.isEmpty, size: 28)
-            Text(info.title)
+            Text(L(info.title))
             Spacer()
             Menu {
-                Button("Use base pack") { model.updatePack(packID) { $0.overriding(info.id, with: []) } }
+                Button(L("Use base pack")) { model.updatePack(packID) { $0.overriding(info.id, with: []) } }
                 Divider()
                 SoundCatalogItems(selected: Set(override)) { ref in
                     model.updatePack(packID) { $0.overriding(info.id, with: [ref]) }

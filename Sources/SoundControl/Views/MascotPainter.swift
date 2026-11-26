@@ -149,6 +149,9 @@ enum MascotPainter {
         case .veryCurious: 1.3
         case .annoyed: 0.85
         case .fleeing: 0.7
+        case .sleepy: 1
+        case .happy: 1.1
+        case .love: 1.25
         }
     }
 
@@ -187,7 +190,7 @@ enum MascotPainter {
         let f = eye.front
         var brow = Path()
         switch face {
-        case .calm:
+        case .calm, .sleepy, .happy, .love:
             return
         case .curious, .veryCurious:
             let lift: CGFloat = face == .curious ? 1.9 : 2.3
@@ -216,15 +219,21 @@ enum MascotPainter {
         case .calm:
             return
         case .curious:
-            graphics.draw(Text("❓").font(font), at: CGPoint(x: top.x + front * size * 0.06, y: top.y - size * 0.05))
+            graphics.draw(Text(L("❓")).font(font), at: CGPoint(x: top.x + front * size * 0.06, y: top.y - size * 0.05))
         case .veryCurious:
-            graphics.draw(Text("❓").font(font), at: CGPoint(x: top.x - front * size * 0.02, y: top.y - size * 0.03))
-            graphics.draw(Text("❓").font(.system(size: size * 0.21)),
+            graphics.draw(Text(L("❓")).font(font), at: CGPoint(x: top.x - front * size * 0.02, y: top.y - size * 0.03))
+            graphics.draw(Text(L("❓")).font(.system(size: size * 0.21)),
                           at: CGPoint(x: top.x + front * size * 0.12, y: top.y - size * 0.09))
         case .annoyed:
-            graphics.draw(Text("💢").font(font), at: CGPoint(x: top.x + front * size * 0.1, y: top.y - size * 0.02))
+            graphics.draw(Text(L("💢")).font(font), at: CGPoint(x: top.x + front * size * 0.1, y: top.y - size * 0.02))
         case .fleeing:
-            graphics.draw(Text("💦").font(font), at: CGPoint(x: top.x - front * size * 0.12, y: top.y + size * 0.02))
+            graphics.draw(Text(L("💦")).font(font), at: CGPoint(x: top.x - front * size * 0.12, y: top.y + size * 0.02))
+        case .sleepy:
+            graphics.draw(Text(L("💤")).font(font), at: CGPoint(x: top.x + front * size * 0.1, y: top.y - size * 0.04))
+        case .happy:
+            graphics.draw(Text(L("🎵")).font(font), at: CGPoint(x: top.x + front * size * 0.1, y: top.y - size * 0.04))
+        case .love:
+            graphics.draw(Text(L("💕")).font(font), at: CGPoint(x: top.x + front * size * 0.06, y: top.y - size * 0.05))
         }
     }
 }

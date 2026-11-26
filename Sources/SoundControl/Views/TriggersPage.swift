@@ -28,7 +28,7 @@ struct TriggersPage: View {
             if TriggerCategory.allCases.allSatisfy({ visibleTriggers(in: $0).isEmpty }) {
                 EmptyState("No matching triggers", message: "Try another word or switch the filter back to All.",
                            systemImage: "magnifyingglass") {
-                    Button("Show all triggers") {
+                    Button(L("Show all triggers")) {
                         search = ""
                         filter = .all
                     }
@@ -45,18 +45,18 @@ struct TriggersPage: View {
             Button {
                 model.update { $0.withRecommendedEnabled() }
             } label: {
-                Label("Turn on recommended", systemImage: "wand.and.stars")
+                Label(L("Turn on recommended"), systemImage: "wand.and.stars")
             }
             Menu {
-                Button("Turn everything on") { model.update { $0.withAllTriggers(enabled: true) } }
-                Button("Turn everything off") { model.update { $0.withAllTriggers(enabled: false) } }
+                Button(L("Turn everything on")) { model.update { $0.withAllTriggers(enabled: true) } }
+                Button(L("Turn everything off")) { model.update { $0.withAllTriggers(enabled: false) } }
             } label: {
                 Image(systemName: "ellipsis.circle")
             }
             .menuIndicator(.hidden)
             .fixedSize()
-            .help("More actions")
-            .accessibilityLabel("More actions")
+            .help(L("More actions"))
+            .accessibilityLabel(L("More actions"))
         }
     }
 
@@ -72,7 +72,7 @@ struct TriggersPage: View {
         SearchField(prompt: "Search triggers", text: $search)
         FilterSegment(title: "Show", selection: $filter)
         Spacer(minLength: 0)
-        Text("\(model.config.enabledTriggers.count) of \(TriggerID.allCases.count) on")
+        Text(L("%@ of %@ on", model.config.enabledTriggers.count, TriggerID.allCases.count))
             .font(.callout.monospacedDigit())
             .foregroundStyle(.secondary)
     }
@@ -83,13 +83,13 @@ struct TriggersPage: View {
         let isCollapsed = collapsed.contains(category) && search.isEmpty
         return VStack(alignment: .leading, spacing: Spacing.related) {
             ListSectionHeader(category.title, count: "\(onCount) of \(all.count) on") {
-                Button(onCount == all.count ? "Turn all off" : "Turn all on") {
+                Button(L(onCount == all.count ? "Turn all off" : "Turn all on")) {
                     model.update { $0.withAllTriggers(enabled: onCount != all.count, in: category) }
                 }
                 .buttonStyle(.link)
                 .font(.caption)
                 RowIconButton(systemImage: isCollapsed ? "chevron.right" : "chevron.down",
-                              help: isCollapsed ? "Show \(category.title)" : "Hide \(category.title)") {
+                              help: L(isCollapsed ? "Show %@" : "Hide %@", L(category.title))) {
                     withAnimation(.easeInOut(duration: 0.15)) { toggle(category) }
                 }
             }
@@ -132,14 +132,14 @@ struct TriggerRow: View {
             SymbolTile(symbol: info.symbol, isActive: isOn)
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 6) {
-                    Text(info.title).font(.body.weight(.medium)).foregroundStyle(isOn ? .primary : .secondary)
+                    Text(L(info.title)).font(.body.weight(.medium)).foregroundStyle(isOn ? .primary : .secondary)
                     if info.isRecommended { Badge(text: "Recommended", color: Theme.accent) }
                     if info.permission == .inputMonitoring { Badge(text: "Input Monitoring", symbol: "hand.raised.fill") }
                     if info.permission == .bluetooth { Badge(text: "Bluetooth", symbol: "hand.raised.fill") }
                 }
                 HStack(spacing: 6) {
-                    Text(info.detail)
-                    Text("·")
+                    Text(L(info.detail))
+                    Text(L("·"))
                     Text(SoundResolver.sourceDescription(for: info.id, in: model.config))
                 }
                 .font(.caption)
@@ -153,8 +153,8 @@ struct TriggerRow: View {
                     } else {
                         HStack(spacing: 4) {
                             Image(systemName: "speaker.wave.2.bubble")
-                            Text("macOS plays its own sound here too.")
-                            Button("Replace it") { model.update { $0.withReplaceMacSounds(true) } }
+                            Text(L("macOS plays its own sound here too."))
+                            Button(L("Replace it")) { model.update { $0.withReplaceMacSounds(true) } }
                                 .buttonStyle(.link)
                         }
                         .font(.caption)
@@ -171,7 +171,7 @@ struct TriggerRow: View {
             PlayButton { model.preview(info.id) }
             TriggerSoundMenu(trigger: info.id)
             RowIconButton(systemImage: "slider.horizontal.3", help: "Sounds, volume and rotation", action: onEdit)
-            Toggle(info.title, isOn: Binding(get: { isOn }, set: { model.setTrigger(info.id, enabled: $0) }))
+            Toggle(L(info.title), isOn: Binding(get: { isOn }, set: { model.setTrigger(info.id, enabled: $0) }))
                 .toggleStyle(.switch)
                 .labelsHidden()
                 .tint(Theme.accent)

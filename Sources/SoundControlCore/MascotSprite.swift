@@ -93,6 +93,7 @@ public struct MascotSpriteLayout: Sendable {
         case .pig: .pig
         case .panda: .panda
         case .hippo: .hippo
+        case .tabby: .tabby
         case .none, .cat, .puppy, .bunny, .penguin: nil
         }
     }
@@ -149,7 +150,9 @@ public struct MascotSpriteState: Sendable, Equatable {
         self.face = face
         self.isOnFloor = !pose.isPickedUp && !pose.isFlying
         let canBlink = face == .calm || face == .curious
-        self.isBlinking = canBlink && pose.elapsed.truncatingRemainder(dividingBy: Self.blinkPeriod) < Self.blinkLength
+        // A sleeping mascot keeps its eyes shut.
+        self.isBlinking = face == .sleepy
+            || (canBlink && pose.elapsed.truncatingRemainder(dividingBy: Self.blinkPeriod) < Self.blinkLength)
         let eye = Self.eyeCenter(layout.frames[frame].near, facesRight: pose.facesRight, viewSize: viewSize)
         self.gaze = Self.gaze(from: eye, to: target, facesRight: pose.facesRight)
     }

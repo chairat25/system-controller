@@ -177,15 +177,15 @@ struct OwnerScanView: View {
             .animation(.smooth(duration: Timing.welcomeFade), value: controller.isWelcomed)
             .allowsHitTesting(false)
             if !controller.isPaused && controller.failure == nil {
-                Text("Keep your finger on Touch ID").font(.callout).foregroundStyle(.secondary)
+                Text(L("Keep your finger on Touch ID")).font(.callout).foregroundStyle(.secondary)
             }
             if let failure = controller.failure {
                 Text(failure).font(.callout).foregroundStyle(Theme.warning)
             }
             if controller.isPaused {
-                Button("Scan finger", action: controller.startScan).buttonStyle(.plain).font(.callout)
+                Button(L("Scan finger"), action: controller.startScan).buttonStyle(.plain).font(.callout)
             } else {
-                Button("Use password", action: controller.usePassword)
+                Button(L("Use password"), action: controller.usePassword)
                     .buttonStyle(.plain)
                     .font(.callout)
                     .foregroundStyle(.secondary)

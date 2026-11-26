@@ -1,4 +1,4 @@
-"""Builds the desktop mascots (pig, cat) in Blender, animates every clip and renders one sprite sheet per animal.
+"""Builds the desktop mascots (pig, panda, hippo, tabby cat) in Blender, animates every clip and renders one sprite sheet per animal.
 
 Run inside Blender (Text editor or `blender -b -P Art/mascots/build_mascots.py`). Writes:
   Resources/Mascots/<animal>.png              8 x 6 sheet of 160 px frames, transparent
@@ -203,60 +203,59 @@ def build_pig():
 
 
 def build_cat():
-    ginger = material("CatFur", (0.96, 0.58, 0.24), stripes=(0.72, 0.34, 0.1))
-    plain = material("CatFurPlain", (0.96, 0.58, 0.24))
+    """A round, short-legged ginger tabby in the same chunky style as the hippo and panda."""
+    ginger = material("CatFur", (0.98, 0.58, 0.22), stripes=(0.86, 0.4, 0.12))
+    plain = material("CatFurPlain", (0.98, 0.56, 0.2))
     cream = material("CatCream", (0.99, 0.93, 0.84))
-    pink = material("CatPink", (0.98, 0.6, 0.66))
-    iris = material("CatIris", (0.72, 0.82, 0.32), roughness=0.15)
+    pink = material("CatPink", (0.98, 0.55, 0.62))
+    eye_mat = material("CatEye", (0.97, 0.97, 0.95), roughness=0.2)
 
-    rig = Rig("Cat")
-    rig.body = sphere("CatBody", rig.torso, (0, 0, 1.07), (0.88, 0.36, 0.37), ginger)
-    sphere("CatHaunch", rig.torso, (-0.5, 0, 1.06), (0.42, 0.38, 0.42), ginger)
-    sphere("CatChest", rig.torso, (0.5, 0, 1.02), (0.36, 0.32, 0.36), cream)
-    sphere("CatNeck", rig.torso, (0.66, 0, 1.2), (0.26, 0.24, 0.27), plain)
+    rig = Rig("Tabby")
+    rig.body = sphere("CatBody", rig.torso, (0, 0, 0.95), (0.95, 0.6, 0.56), ginger)
+    sphere("CatBelly", rig.torso, (0.15, 0, 0.82), (0.75, 0.5, 0.4), cream)
+    sphere("CatChest", rig.torso, (0.55, 0, 0.98), (0.38, 0.46, 0.44), cream)
 
     def paw(rig, key, knee, length, mat):
-        sphere(f"CatPaw{key}", knee, (0.03, 0, -length - 0.02), (0.12, 0.09, 0.065), mat)
+        sphere(f"CatPaw{key}", knee, (0.05, 0, -length), (0.17, 0.15, 0.08), mat)
 
     for key in LEGS:
         front = key[0] == "F"
-        y = 0.2 if key[1] == "L" else -0.2
-        thigh = (0.5, 0.1, 0.075) if front else (0.5, 0.15, 0.08)
-        leg(rig, key, (0.52 if front else -0.56, y, 0.95), thigh, (0.39, 0.07, 0.06), cream, ginger, paw)
+        y = 0.32 if key[1] == "L" else -0.32
+        leg(rig, key, (0.55 if front else -0.55, y, 0.7), (0.32, 0.17, 0.15), (0.26, 0.14, 0.13), cream, plain, paw)
 
-    head = empty("CatHeadPivot", rig.torso, (0.84, 0, 1.34))
+    head = empty("CatHeadPivot", rig.torso, (0.85, 0, 1.25))
     rig.head = head
-    sphere("CatHead", head, (0.12, 0, 0.08), (0.34, 0.32, 0.29), ginger)
+    sphere("CatHead", head, (0.18, 0, 0.08), (0.5, 0.5, 0.44), plain)
     for side in (1, -1):
-        sphere(f"CatMuzzle{side}", head, (0.38, 0.06 * side, -0.05), (0.1, 0.09, 0.075), cream)
-        ear = empty(f"CatEarPivot{side}", head, (0.06, 0.16 * side, 0.3), (-0.28 * side, -0.12, 0))
-        cone(f"CatEar{side}", ear, (0, 0, 0.1), 0.12, 0.0, 0.24, plain, scale=(0.6, 1, 1))
-        cone(f"CatEarInner{side}", ear, (0.035, 0, 0.08), 0.07, 0.0, 0.16, pink, scale=(0.4, 0.8, 1))
+        sphere(f"CatCheek{side}", head, (0.42, 0.2 * side, -0.1), (0.2, 0.2, 0.15), cream)
+        ear = empty(f"CatEarPivot{side}", head, (0.08, 0.26 * side, 0.4), (0.22 * side, 0.08, 0))
+        cone(f"CatEar{side}", ear, (0, 0, 0.12), 0.17, 0.02, 0.3, plain, scale=(0.55, 1, 1))
+        cone(f"CatEarInner{side}", ear, (0.05, 0, 0.1), 0.1, 0.0, 0.2, pink, scale=(0.35, 0.8, 1))
         rig.ears.append(ear)
         rig.eyes["near" if side < 0 else "far"] = sphere(
-            f"CatEye{side}", head, (0.33, 0.135 * side, 0.12), (0.1, 0.1, 0.11), iris)
-    sphere("CatNose", head, (0.46, 0, 0.0), (0.03, 0.045, 0.028), pink)
-    rig.head_top = empty("CatHeadTop", head, (0.1, 0, 0.62))
+            f"CatEye{side}", head, (0.56, 0.2 * side, 0.18), (0.1, 0.1, 0.11), eye_mat)
+    sphere("CatNose", head, (0.66, 0, 0.0), (0.04, 0.065, 0.04), pink)
+    rig.head_top = empty("CatHeadTop", head, (0.15, 0, 0.72))
     rig.ear_rest = [tuple(e.rotation_euler) for e in rig.ears]
 
-    # Six joints, each bent a little, so the tail curls and waves instead of swinging as one stick.
-    parent = empty("CatTail0", rig.torso, (-0.8, 0, 1.18), (0, -0.55, 0))
+    # Six joints, each bent a little, so the tail curls up and waves instead of swinging as one stick.
+    parent = empty("CatTail0", rig.torso, (-0.88, 0, 1.1), (0, 1.1, 0))
     rig.tail.append(parent)
     for index in range(6):
-        radius = 0.065 - index * 0.004
-        cone(f"CatTailBone{index}", parent, (-0.09, 0, 0), radius, radius + 0.004, 0.2, ginger,
+        radius = 0.1 - index * 0.006
+        cone(f"CatTailBone{index}", parent, (-0.09, 0, 0), radius, radius + 0.006, 0.2, plain,
              rot=(0, math.pi / 2, 0))
-        sphere(f"CatTailJoint{index}", parent, (-0.18, 0, 0), (radius,) * 3, ginger)
+        sphere(f"CatTailJoint{index}", parent, (-0.18, 0, 0), (radius,) * 3, cream if index == 5 else plain)
         if index < 5:
-            parent = empty(f"CatTail{index + 1}", parent, (-0.18, 0, 0), (0, -0.18, 0))
+            parent = empty(f"CatTail{index + 1}", parent, (-0.18, 0, 0), (0, -0.2, 0))
             rig.tail.append(parent)
     rig.tail_rest = [tuple(t.rotation_euler) for t in rig.tail]
 
-    rig.walk_amp = {"F": 0.36, "B": 0.4}
-    rig.walk_knee = {"F": 1.1, "B": 0.85}
-    rig.bob = 0.02
-    rig.ortho = 3.25
-    rig.center = 0.56
+    rig.walk_amp = {"F": 0.32, "B": 0.34}
+    rig.walk_knee = {"F": 0.85, "B": 0.7}
+    rig.bob = 0.03
+    rig.ortho = 3.9
+    rig.center = 0.46
     rig.pupil = "slit"
     return rig
 
@@ -683,8 +682,8 @@ def write_swift(results):
     return path
 
 
-def build_all(names=("Pig", "Panda", "Hippo")):
-    builders = {"Pig": build_pig, "Cat": build_cat, "Panda": build_panda, "Hippo": build_hippo}
+def build_all(names=("Pig", "Panda", "Hippo", "Tabby")):
+    builders = {"Pig": build_pig, "Tabby": build_cat, "Panda": build_panda, "Hippo": build_hippo}
     results = {}
     for name in names:
         clear_scene()

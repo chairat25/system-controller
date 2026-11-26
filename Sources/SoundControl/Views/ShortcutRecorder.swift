@@ -18,17 +18,19 @@ struct ShortcutRecorder: View {
                 Button(action: toggle) {
                     Text(buttonTitle)
                         .font(.body.monospaced())
-                        .frame(minWidth: 130)
+                        .frame(minWidth: 90)
                 }
                 .controlSize(.regular)
                 if shortcut != nil, !isRecording {
-                    Button("Clear") { onChange(nil) }.buttonStyle(.borderless).font(.caption)
+                    Button(L("Clear")) { onChange(nil) }.buttonStyle(.borderless).font(.caption)
                 }
             }
             if let hint {
-                Text(hint).font(.caption).foregroundStyle(Theme.warning)
+                Text(L(hint)).font(.caption).foregroundStyle(Theme.warning)
             }
         }
+        // Its own size, never stretched by the row it sits in.
+        .fixedSize()
         .onDisappear { stopRecording() }
     }
 

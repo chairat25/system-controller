@@ -14,7 +14,7 @@ struct SoundCatalogItems: View {
                     item(.synth(pack: pack, motif: motif, take: 0), title: motif.title)
                 }
             } label: {
-                Label(pack.title, systemImage: pack.symbol)
+                Label(L(pack.title), systemImage: pack.symbol)
             }
         }
         Menu {
@@ -26,13 +26,13 @@ struct SoundCatalogItems: View {
         }
         Menu {
             if model.config.userSounds.isEmpty {
-                Text("No sounds yet — import some in My Sounds")
+                Text(L("No sounds yet — import some in My Sounds"))
             }
             ForEach(model.config.userSounds) { sound in
                 item(.user(id: sound.id), title: sound.name)
             }
         } label: {
-            Label("My Sounds", systemImage: "waveform")
+            Label(L("My Sounds"), systemImage: "waveform")
         }
     }
 
@@ -41,9 +41,9 @@ struct SoundCatalogItems: View {
             onPick(ref)
         } label: {
             if selected.contains(ref) {
-                Label(title, systemImage: "checkmark")
+                Label(L(title), systemImage: "checkmark")
             } else {
-                Text(title)
+                Text(L(title))
             }
         }
     }
@@ -61,9 +61,9 @@ struct TriggerSoundMenu: View {
                 model.setSounds([], for: trigger)
             } label: {
                 if setting.followsPack {
-                    Label("Follow pack", systemImage: "checkmark")
+                    Label(L("Follow pack"), systemImage: "checkmark")
                 } else {
-                    Text("Follow pack")
+                    Text(L("Follow pack"))
                 }
             }
             Divider()
@@ -85,7 +85,7 @@ struct TriggerSoundMenu: View {
         .padding(.vertical, 4)
         .background(Theme.accentSoft, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
         .foregroundStyle(Theme.accent)
-        .help("Choose the sound for this trigger")
+        .help(L("Choose the sound for this trigger"))
     }
 
     private func chipTitle(_ setting: TriggerSetting) -> String {

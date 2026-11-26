@@ -18,18 +18,18 @@ struct SoundPanel: View {
     private var engine: some View {
         let isOn = model.config.isListening
         let count = model.config.enabledTriggers.count
-        return PopoverSection("Sound Engine") {
+        return PopoverSection(L("Sound Engine")) {
             HStack(spacing: Spacing.control) {
                 Image(systemName: "waveform.circle.fill")
                     .font(.title)
                     .foregroundStyle(isOn ? Theme.accent : .secondary)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("Sound Control").font(.headline)
+                    Text(L("Sound Control")).font(.headline)
                     StatusIndicator(text: isOn ? "Listening · \(count) trigger\(count == 1 ? "" : "s") on" : "Paused",
                                     level: isOn ? .good : .off)
                 }
                 Spacer(minLength: Spacing.related)
-                Toggle("Sound Control", isOn: Binding(get: { isOn },
+                Toggle(L("Sound Control"), isOn: Binding(get: { isOn },
                                                       set: { value in model.update { $0.withListening(value) } }))
                     .toggleStyle(.switch)
                     .labelsHidden()
@@ -40,7 +40,7 @@ struct SoundPanel: View {
 
     private var volumeAndPack: some View {
         let volume = model.config.masterVolume
-        return PopoverSection("Volume & Sound Pack") {
+        return PopoverSection(L("Volume & Sound Pack")) {
             HStack(spacing: Spacing.related) {
                 Image(systemName: volume == 0 ? "speaker.slash.fill" : "speaker.fill")
                     .foregroundStyle(.secondary)
@@ -54,9 +54,9 @@ struct SoundPanel: View {
                     .frame(width: 34, alignment: .trailing)
             }
             SettingRow("Pack", systemImage: "square.stack.3d.up") {
-                Picker("Pack", selection: Binding(get: { model.config.activePack },
+                Picker(L("Pack"), selection: Binding(get: { model.config.activePack },
                                                   set: { value in model.update { $0.selectingPack(value) } })) {
-                    ForEach(BuiltInPack.allCases, id: \.self) { Text($0.title).tag(PackSelection.builtIn($0)) }
+                    ForEach(BuiltInPack.allCases, id: \.self) { Text(L($0.title)).tag(PackSelection.builtIn($0)) }
                     if !model.config.customPacks.isEmpty {
                         Divider()
                         ForEach(model.config.customPacks) { Text($0.name).tag(PackSelection.custom($0.id)) }
@@ -69,7 +69,7 @@ struct SoundPanel: View {
     }
 
     private var recent: some View {
-        PopoverSection("Recent Activity") {
+        PopoverSection(L("Recent Activity")) {
             if model.log.entries.count > Self.recentCount {
                 OpenWindowLink(title: "Show all")
             }
@@ -93,7 +93,7 @@ private struct QuickActions: View {
 
     var body: some View {
         let isLocked = model.keyboardLock.isLocked
-        PopoverSection("Quick Actions") {
+        PopoverSection(L("Quick Actions")) {
             if isLocked {
                 StatusIndicator(text: "Locked", level: .pending)
             }
@@ -104,7 +104,7 @@ private struct QuickActions: View {
                                   isDisabled: isLocked) { model.lockForOwner() }
             if let problem = model.keyboardLock.problem {
                 Footnote(problem, tone: Theme.warning)
-                Button("Open Accessibility Settings") { PrivacySettings.openAccessibility() }
+                Button(L("Open Accessibility Settings")) { PrivacySettings.openAccessibility() }
                     .font(.caption)
             }
         }
@@ -120,7 +120,7 @@ struct EventListItem: View {
         HStack(spacing: Spacing.related) {
             SymbolTile(symbol: info.symbol, isActive: entry.didPlay, size: 24)
             VStack(alignment: .leading, spacing: 1) {
-                Text(info.title).font(.callout).lineLimit(1)
+                Text(L(info.title)).font(.callout).lineLimit(1)
                 outcome
             }
             Spacer(minLength: Spacing.related)
@@ -155,14 +155,11 @@ struct EventListItem: View {
 
 /// Opens the full Sound Control window, where every event, trigger and pack lives.
 struct OpenWindowLink: View {
-    @Environment(\.openWindow) private var openWindow
+    @Environment(AppModel.self) private var model
     let title: String
 
     var body: some View {
-        Button(title) {
-            openWindow(id: "main")
-            NSApp.activate()
-        }
+        Button(L(title)) { model.showMainWindow() }
         .buttonStyle(.link)
         .font(.caption)
     }

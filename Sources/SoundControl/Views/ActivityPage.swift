@@ -10,7 +10,7 @@ struct ActivityPage: View {
         WindowPage {
             PageHeader(title: "Activity",
                        subtitle: "What your Mac did and what it sounded like. Keys, clicks and volume ticks are not logged.") {
-                Text("\(model.log.playCount(since: Calendar.current.startOfDay(for: Date()))) played today")
+                Text(L("%@ played today", model.log.playCount(since: Calendar.current.startOfDay(for: Date()))))
                     .font(.callout.monospacedDigit())
                     .foregroundStyle(.secondary)
             }
@@ -45,7 +45,7 @@ struct ActivityPage: View {
         if groups.isEmpty {
             EmptyState("No matching events", message: "Try another word or switch the filter back to All.",
                        systemImage: "magnifyingglass") {
-                Button("Show all events") {
+                Button(L("Show all events")) {
                     search = ""
                     filter = .all
                 }
@@ -80,8 +80,8 @@ struct ActivityRow: View {
         HStack(spacing: 12) {
             SymbolTile(symbol: info.symbol, isActive: entry.didPlay, size: compact ? 24 : Theme.tileSize)
             VStack(alignment: .leading, spacing: 2) {
-                Text(info.title).font(compact ? .callout : .body.weight(.medium))
-                Text(subtitle).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                Text(L(info.title)).font(compact ? .callout : .body.weight(.medium))
+                Text(L(subtitle)).font(.caption).foregroundStyle(.secondary).lineLimit(1)
             }
             Spacer()
             if !entry.didPlay {

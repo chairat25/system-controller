@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 import SoundControlCore
 
@@ -41,9 +42,83 @@ struct Card<Content: View>: View {
 
     var body: some View {
         VStack(spacing: 0) { content }
-            .background(.background.secondary, in: RoundedRectangle(cornerRadius: Theme.cardRadius, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: Theme.cardRadius, style: .continuous)
-                .strokeBorder(Color.primary.opacity(0.06)))
+            .glassSurface(radius: Theme.cardRadius)
+    }
+}
+
+/// Frosted glass: a translucent fill that catches light from the top left, a bright rim that fades towards the
+/// bottom right, and a soft shadow that lifts it off the page. With Reduce transparency on, it is a solid fill.
+struct GlassSurface: ViewModifier {
+    let radius: CGFloat
+    /// A rim colour that replaces the white one, such as the accent on the card in use.
+    var rim: Color?
+    var rimWidth: CGFloat = 1
+    /// Small controls skip the frost and the shadow; they sit on a surface that already has both.
+    var isChip = false
+
+    @Environment(\.colorScheme) private var scheme
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+
+    private var isDark: Bool { scheme == .dark }
+
+    func body(content: Content) -> some View {
+        let shape = RoundedRectangle(cornerRadius: radius, style: .continuous)
+        if reduceTransparency {
+            content
+                .background(Color(nsColor: .controlBackgroundColor), in: shape)
+                .overlay(shape.strokeBorder(rim ?? Theme.hairline, lineWidth: rimWidth))
+        } else {
+            content
+                .background {
+                    ZStack {
+                        if !isChip { shape.fill(.ultraThinMaterial) }
+                        shape.fill(LinearGradient(colors: fill, startPoint: .topLeading, endPoint: .bottomTrailing))
+                    }
+                }
+                .overlay(shape.strokeBorder(rim.map { AnyShapeStyle($0) } ?? AnyShapeStyle(rimGradient), lineWidth: rimWidth))
+                .shadow(color: .black.opacity(isChip ? 0 : (isDark ? 0.18 : 0.08)), radius: 4, y: 2)
+        }
+    }
+
+    private var fill: [Color] {
+        isDark ? [.white.opacity(isChip ? 0.12 : 0.09), .white.opacity(isChip ? 0.05 : 0.03)]
+               : [.white.opacity(0.7), .white.opacity(0.38)]
+    }
+
+    private var rimGradient: LinearGradient {
+        let colors: [Color] = isDark ? [.white.opacity(0.3), .white.opacity(0.05), .white.opacity(0.12)]
+                                     : [.white.opacity(0.95), .black.opacity(0.04), .black.opacity(0.08)]
+        return LinearGradient(colors: colors, startPoint: .topLeading, endPoint: .bottomTrailing)
+    }
+}
+
+extension View {
+    func glassSurface(radius: CGFloat = Theme.groupRadius, rim: Color? = nil, rimWidth: CGFloat = 1) -> some View {
+        modifier(GlassSurface(radius: radius, rim: rim, rimWidth: rimWidth))
+    }
+
+    /// A choice button: lit glass when idle, the accent with a soft highlight on top when picked.
+    func glassChip(isSelected: Bool, radius: CGFloat = 7) -> some View {
+        modifier(GlassChip(isSelected: isSelected, radius: radius))
+    }
+}
+
+struct GlassChip: ViewModifier {
+    let isSelected: Bool
+    let radius: CGFloat
+
+    func body(content: Content) -> some View {
+        let shape = RoundedRectangle(cornerRadius: radius, style: .continuous)
+        if isSelected {
+            content
+                .background(Theme.accent, in: shape)
+                .overlay(shape.fill(LinearGradient(colors: [.white.opacity(0.28), .clear],
+                                                   startPoint: .top, endPoint: .center)))
+                .overlay(shape.strokeBorder(.white.opacity(0.35)))
+                .shadow(color: Theme.accent.opacity(0.35), radius: 4, y: 1)
+        } else {
+            content.modifier(GlassSurface(radius: radius, isChip: true))
+        }
     }
 }
 
@@ -56,7 +131,7 @@ struct Badge: View {
     var body: some View {
         HStack(spacing: 3) {
             if let symbol { Image(systemName: symbol) }
-            Text(text)
+            Text(L(text))
         }
         .font(.caption2.weight(.semibold))
         .foregroundStyle(color)
@@ -74,8 +149,8 @@ struct PageHeader<Accessory: View>: View {
     var body: some View {
         HStack(alignment: .top, spacing: Spacing.control) {
             VStack(alignment: .leading, spacing: Spacing.micro) {
-                Text(title).font(.largeTitle.weight(.semibold))
-                Text(subtitle).font(.callout).foregroundStyle(.secondary)
+                Text(L(title)).font(.largeTitle.weight(.semibold))
+                Text(L(subtitle)).font(.callout).foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
             Spacer()
@@ -97,8 +172,8 @@ struct PlayButton: View {
                 .background(Theme.accentSoft, in: Circle())
         }
         .buttonStyle(.plain)
-        .help("Preview")
-        .accessibilityLabel("Preview sound")
+        .help(L("Preview"))
+        .accessibilityLabel(L("Preview sound"))
     }
 }
 

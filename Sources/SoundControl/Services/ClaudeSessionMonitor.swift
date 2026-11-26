@@ -13,6 +13,7 @@ import SoundControlCore
 @Observable
 final class ClaudeSessionMonitor {
     private static let pollInterval: TimeInterval = 1
+    private static let pollTolerance = 0.2
     /// Reading a terminal costs a fraction of a second, so at most a few expanded sessions are mirrored.
     private static let mirroredSessions = 3
     private static let mirroredLines = 12
@@ -48,6 +49,13 @@ final class ClaudeSessionMonitor {
     @ObservationIgnored private var nextQuotaFetch = Date.distantPast
     @ObservationIgnored private var isFetchingQuota = false
     @ObservationIgnored private var timer: Timer?
+    /// Session files already parsed, by file, with the modification date they had.
+    @ObservationIgnored private var parsedSessions: [URL: ParsedSession] = [:]
+
+    private struct ParsedSession {
+        let modified: Date?
+        let session: ClaudeSession?
+    }
     @ObservationIgnored private let logger = Logger(subsystem: "com.pond.soundcontrol", category: "ClaudeSessionMonitor")
 
     func start(settings: @escaping () -> LimitGuardSettings,
@@ -58,9 +66,21 @@ final class ClaudeSessionMonitor {
         self.idleSettings = idleSettings
         self.isLocked = isLocked
         scan()
-        timer = Timer.scheduledTimer(withTimeInterval: Self.pollInterval, repeats: true) { [weak self] _ in
+        schedule(every: Self.pollInterval)
+    }
+
+    /// Reads the sessions folder less often while the Mac is struggling (see `ResourceBudget.sessionPollInterval`).
+    func setPollInterval(_ interval: TimeInterval) {
+        guard timer != nil, timer?.timeInterval != interval else { return }
+        schedule(every: interval)
+    }
+
+    private func schedule(every interval: TimeInterval) {
+        timer?.invalidate()
+        timer = Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated { self?.scan() }
         }
+        timer?.tolerance = interval * Self.pollTolerance
     }
 
     /// The screen saver asks for live terminal text while it is on screen, and lets go when it closes.
@@ -111,7 +131,7 @@ final class ClaudeSessionMonitor {
 
     private func scan() {
         let now = Date()
-        let reading = transcripts.read(ClaudeSession.collapsed(Self.readSessions()), now: now, isWatched: isFeedVisible)
+        let reading = transcripts.read(ClaudeSession.collapsed(readSessions()), now: now, isWatched: isFeedVisible)
         let sessions = reading.sessions
         // Observation redraws every reader on any assignment, so unchanged values are not written back each second.
         if reading.activity != activity { activity = reading.activity }
@@ -225,13 +245,25 @@ final class ClaudeSessionMonitor {
     // MARK: - Reading
 
     /// Session files whose process is gone are left behind by Claude, so each pid is checked.
-    private static func readSessions() -> [ClaudeSession] {
-        let files = (try? FileManager.default.contentsOfDirectory(at: ClaudePaths.sessions, includingPropertiesForKeys: nil)) ?? []
-        return files.filter { $0.pathExtension == "json" }.compactMap { file in
-            guard let data = try? Data(contentsOf: file), let session = ClaudeSession.parse(data),
-                  isAlive(session.pid) else { return nil }
-            return session
+    /// Every second: one directory listing with modification dates, and a file is opened and parsed only when it
+    /// is new or changed. (Opening each of a few dozen files every second showed up as most of the idle CPU time.)
+    private func readSessions() -> [ClaudeSession] {
+        let keys: Set<URLResourceKey> = [.contentModificationDateKey]
+        let files = ((try? FileManager.default.contentsOfDirectory(at: ClaudePaths.sessions,
+                                                                   includingPropertiesForKeys: Array(keys))) ?? [])
+            .filter { $0.pathExtension == "json" }
+        var next: [URL: ParsedSession] = [:]
+        for file in files {
+            let modified = (try? file.resourceValues(forKeys: keys))?.contentModificationDate
+            if let cached = parsedSessions[file], cached.modified == modified, modified != nil {
+                next[file] = cached
+            } else {
+                let session = (try? Data(contentsOf: file)).flatMap(ClaudeSession.parse)
+                next[file] = ParsedSession(modified: modified, session: session)
+            }
         }
+        parsedSessions = next
+        return next.values.compactMap(\.session).filter { Self.isAlive($0.pid) }
     }
 
     private static func isAlive(_ pid: Int32) -> Bool {

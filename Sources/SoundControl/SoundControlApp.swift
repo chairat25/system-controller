@@ -3,30 +3,13 @@ import SwiftUI
 
 @main
 struct SoundControlApp: App {
-    private static let hasLaunchedKey = "hasLaunchedBefore"
-
     @State private var model = AppModel()
-    /// The window opens by itself only on the very first launch; afterwards the app lives in the menu bar.
-    private let isFirstLaunch: Bool = {
-        let defaults = UserDefaults.standard
-        let first = !defaults.bool(forKey: SoundControlApp.hasLaunchedKey)
-        defaults.set(true, forKey: SoundControlApp.hasLaunchedKey)
-        return first
-    }()
 
     var body: some Scene {
-        MenuBarExtra {
-            MenuBarView().environment(model)
-        } label: {
-            Image(systemName: "slider.horizontal.3")
+        // The menu-bar icon and its popup are AppKit (`MenuBarPopup`), so the popup shortcut can open it; the full
+        // window is an AppKit window too (`MainWindowController`). SwiftUI still needs one scene, which shows nothing.
+        MenuBarExtra("System Controller", systemImage: "slider.horizontal.3", isInserted: .constant(false)) {
+            EmptyView()
         }
-        .menuBarExtraStyle(.window)
-
-        Window("System Controller", id: "main") {
-            MainWindow().environment(model)
-        }
-        .defaultSize(width: 980, height: 720)
-        .windowResizability(.contentMinSize)
-        .defaultLaunchBehavior(isFirstLaunch ? .presented : .suppressed)
     }
 }
