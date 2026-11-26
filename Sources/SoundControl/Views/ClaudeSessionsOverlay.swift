@@ -89,7 +89,7 @@ private struct SessionCard: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .help(isExpanded ? "Fold" : "Watch it live")
+            .help(L(isExpanded ? "Fold" : "Watch it live"))
             Button(action: onPin) {
                 Image(systemName: row.isPinned ? "pin.fill" : "pin")
                     .font(.caption2)
@@ -97,7 +97,7 @@ private struct SessionCard: View {
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .help(row.isPinned ? "Unpin" : "Pin to keep it here")
+            .help(L(row.isPinned ? "Unpin" : "Pin to keep it here"))
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 6)
@@ -140,7 +140,7 @@ private struct SessionCard: View {
     private var feed: some View {
         VStack(alignment: .leading, spacing: 3) {
             if lines.isEmpty, !row.session.isWorking {
-                Text("Nothing new yet").font(.system(size: 11, design: .monospaced)).foregroundStyle(.secondary)
+                Text(L("Nothing new yet")).font(.system(size: 11, design: .monospaced)).foregroundStyle(.secondary)
             }
             ForEach(Array(lines.enumerated()), id: \.offset) { _, line in
                 Text(Self.glyph(line.kind) + line.text)
@@ -169,7 +169,7 @@ private struct WorkingLine: View {
     @State private var isDim = false
 
     var body: some View {
-        Text("✻ Working…")
+        Text(L("✻ Working…"))
             .font(.system(size: 11, design: .monospaced))
             .foregroundStyle(Theme.working)
             .opacity(isDim ? 0.35 : 1)

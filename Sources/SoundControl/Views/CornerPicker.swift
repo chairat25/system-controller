@@ -18,7 +18,7 @@ struct CornerPicker: View {
             }
         }
         .padding(4)
-        .background(Color.secondary.opacity(0.1), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .glassSurface(radius: 8)
     }
 
     private func cell(_ corner: ScreenSaverCorner) -> some View {
@@ -37,8 +37,8 @@ struct CornerPicker: View {
                 }
         }
         .buttonStyle(.plain)
-        .help(corner.title)
-        .accessibilityLabel(corner.title)
+        .help(L(corner.title))
+        .accessibilityLabel(L(corner.title))
         .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 }

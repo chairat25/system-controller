@@ -26,9 +26,9 @@ struct GaugeCapsule<Leading: View>: View {
     var body: some View {
         HStack(spacing: 10) {
             leading()
-            Text(title).font(.headline).opacity(showsTitle ? 1 : 0)
+            Text(L(title)).font(.headline).opacity(showsTitle ? 1 : 0)
         }
-        .accessibilityLabel(title)
+        .accessibilityLabel(L(title))
         .padding(.horizontal, 28)
         .padding(.vertical, 14)
         .background {

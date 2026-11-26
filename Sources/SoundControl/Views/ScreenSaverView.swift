@@ -63,9 +63,9 @@ struct ScreenSaverView<Unlock: View, Corner: View>: View {
         VStack(spacing: 6) {
             HStack(spacing: 10) {
                 Image(systemName: "heart.fill").foregroundStyle(Theme.accent)
-                Text(settings.title).lineLimit(1).font(.title2.weight(.semibold))
+                Text(L(settings.title)).lineLimit(1).font(.title2.weight(.semibold))
             }
-            Text("Only the owner can unlock.").font(.callout).foregroundStyle(.secondary)
+            Text(L("Only the owner can unlock.")).font(.callout).foregroundStyle(.secondary)
         }
     }
 
@@ -164,7 +164,7 @@ struct ScreenSaverView<Unlock: View, Corner: View>: View {
             .padding(4)
             .contentShape(Circle())
             .pointerStyle(.frameResize(position: .bottomTrailing))
-            .help("Drag to resize")
+            .help(L("Drag to resize"))
             .highPriorityGesture(
                 DragGesture(minimumDistance: 1, coordinateSpace: .named(Layout.canvasSpace))
                     .onChanged { value in

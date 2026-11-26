@@ -239,7 +239,7 @@ enum MascotArt {
 
     private static func look(_ mascot: Mascot) -> Look {
         switch mascot {
-        case .none, .cat:
+        case .none, .cat, .tabby:
             Look(fur: Color(red: 1, green: 0.72, blue: 0.42), belly: Color(red: 1, green: 0.93, blue: 0.83),
                  feet: Color(red: 1, green: 0.93, blue: 0.83))
         case .hippo:
@@ -281,7 +281,7 @@ enum MascotArt {
         let sway = CGFloat(sin(motion.time * 3)) * 3
         let wag = CGFloat(sin(motion.time * 12)) * 3
         switch mascot {
-        case .cat:
+        case .cat, .tabby:
             var tail = Path()
             tail.move(to: CGPoint(x: 17, y: 52 + motion.bob))
             tail.addQuadCurve(to: CGPoint(x: 8 + sway, y: 34 + motion.bob), control: CGPoint(x: 4, y: 50))
@@ -324,7 +324,7 @@ enum MascotArt {
         let pink = Color(red: 1, green: 0.7, blue: 0.75)
         let y = motion.bob
         switch mascot {
-        case .cat, .pig:
+        case .cat, .tabby, .pig:
             graphics.fill(triangle(CGPoint(x: 27, y: 20 + y), CGPoint(x: 30, y: 6 + y), CGPoint(x: 38, y: 15 + y)), with: .color(look.fur))
             graphics.fill(triangle(CGPoint(x: 44, y: 15 + y), CGPoint(x: 51, y: 6 + y), CGPoint(x: 54, y: 20 + y)), with: .color(look.fur))
             graphics.fill(triangle(CGPoint(x: 29.5, y: 17 + y), CGPoint(x: 31, y: 10 + y), CGPoint(x: 35, y: 15 + y)), with: .color(pink))
@@ -363,7 +363,7 @@ enum MascotArt {
             graphics.fill(Path(ellipseIn: CGRect(x: 36, y: 29 + motion.bob, width: 12, height: 8)), with: .color(snout))
             graphics.fill(Path(ellipseIn: CGRect(x: 39, y: 31.5 + motion.bob, width: 2, height: 3)), with: .color(Self.eyeColor))
             graphics.fill(Path(ellipseIn: CGRect(x: 43, y: 31.5 + motion.bob, width: 2, height: 3)), with: .color(Self.eyeColor))
-        case .cat, .bunny, .hippo, .none:
+        case .cat, .tabby, .bunny, .hippo, .none:
             break
         }
     }
@@ -397,7 +397,7 @@ enum MascotArt {
                 graphics.fill(Path(ellipseIn: CGRect(x: 40.5, y: 36.5 + y, width: 3.4, height: 3.6)),
                               with: .color(Color(red: 1, green: 0.5, blue: 0.55)))
             }
-        case .cat, .bunny:
+        case .cat, .tabby, .bunny:
             graphics.fill(triangle(CGPoint(x: 40.5, y: 32.5 + y), CGPoint(x: 43.5, y: 32.5 + y), CGPoint(x: 42, y: 34.5 + y)),
                           with: .color(Color(red: 1, green: 0.5, blue: 0.6)))
             if motion.isPickedUp {
@@ -405,7 +405,7 @@ enum MascotArt {
             } else {
                 drawMouth(at: CGPoint(x: 42, y: 34.5 + y), in: &graphics)
             }
-            if mascot == .cat { drawWhiskers(y: y, in: &graphics) }
+            if mascot == .cat || mascot == .tabby { drawWhiskers(y: y, in: &graphics) }
         case .pig:
             drawMouth(at: CGPoint(x: 42, y: 38.5 + y), in: &graphics)
         case .none:

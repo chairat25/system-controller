@@ -4,13 +4,16 @@ import SoundControlCore
 /// Reads what each session is up to from the end of its transcript in `~/.claude/projects`:
 /// the topic the terminal tab shows, and the latest messages and tool calls for the terminal-style feed.
 /// Only the last few hundred KB are read, and only after the transcript changed, so large files stay cheap.
+/// The read itself runs off the main thread: opening a large transcript can block for a long time (security
+/// software scans files on open), and the result shows up on the next poll instead of stalling the UI.
 @MainActor
 final class SessionTranscriptReader {
-    private static let tailBytes = 512 * 1024
+    private nonisolated static let tailBytes = 512 * 1024
     private static let activeRefresh: TimeInterval = 1
     /// Just after a session stops its reply lands in the transcript, so it keeps the fast refresh for a while.
     private static let activeGrace: TimeInterval = 30
-    private static let restingRefresh: TimeInterval = 15
+    /// With no feed on screen only the topic is needed, and it rarely changes (a new session is read at once).
+    private static let restingRefresh: TimeInterval = 60
     private static let retryInterval: TimeInterval = 30
 
     private struct Entry {
@@ -27,6 +30,8 @@ final class SessionTranscriptReader {
 
     private let root = ClaudePaths.projects
     private var entries: [String: Entry] = [:]
+    /// Sessions whose tail is being read in the background.
+    private var reading: Set<String> = []
 
     /// The sessions with their topics filled in, and each session's latest activity. Closed sessions are forgotten.
     /// While nothing shows the feed (`isWatched` false) every session uses the slow refresh, since only titles are needed.
@@ -59,11 +64,24 @@ final class SessionTranscriptReader {
         guard isFirstRead || modified != entry.modified else { return entry.digest }
         entry.checkedAt = now
         entry.modified = modified
-        // Parsed objects are autoreleased; draining here keeps each read's garbage from piling up.
-        if let digest = autoreleasepool(invoking: { readTail(file).map { ClaudeTranscript.digest(inTail: $0) } }) {
-            entry.digest = digest
-        }
+        startReading(session.id, file: file)
         return entry.digest
+    }
+
+    private func startReading(_ id: String, file: URL) {
+        guard reading.insert(id).inserted else { return }
+        Task.detached(priority: .utility) { [weak self] in
+            // Parsed objects are autoreleased; draining here keeps each read's garbage from piling up.
+            let digest = autoreleasepool { Self.readTail(file).map { ClaudeTranscript.digest(inTail: $0) } }
+            await self?.finishReading(id, digest: digest)
+        }
+    }
+
+    private func finishReading(_ id: String, digest: TranscriptDigest?) {
+        reading.remove(id)
+        guard let digest, var entry = entries[id] else { return }
+        entry.digest = digest
+        entries[id] = entry
     }
 
     /// Transcripts live in one folder per project, so the session id is searched across them.
@@ -73,7 +91,7 @@ final class SessionTranscriptReader {
             .first { FileManager.default.fileExists(atPath: $0.path) }
     }
 
-    private func readTail(_ file: URL) -> Data? {
+    private nonisolated static func readTail(_ file: URL) -> Data? {
         guard let handle = try? FileHandle(forReadingFrom: file) else { return nil }
         defer { try? handle.close() }
         guard let size = try? handle.seekToEnd() else { return nil }

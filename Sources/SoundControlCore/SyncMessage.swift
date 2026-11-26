@@ -37,8 +37,10 @@ public struct WallpaperMeta: Codable, Sendable, Equatable {
 
 /// Everything two Macs say to each other, as JSON inside message frames.
 public enum SyncMessage: Codable, Sendable, Equatable {
-    /// First message on a synced connection. The flags say what the sender wants to receive.
-    case hello(deviceID: String, name: String, wantsWallpaper: Bool, wantsRoaming: Bool)
+    /// First message on a synced connection. The flags say what the sender wants to receive. `appVersion` and
+    /// `platform` ("macos", "windows") are nil from 1.6.0 and older; they let each side warn about a mismatch.
+    case hello(deviceID: String, name: String, wantsWallpaper: Bool, wantsRoaming: Bool,
+               appVersion: String? = nil, platform: String? = nil)
     /// Pairing step 1 (initiator): a hash of its public key, sent before it sees the other key.
     case pairCommit(deviceID: String, name: String, commitment: Data)
     /// Pairing step 2 (responder): its public key.
@@ -53,6 +55,9 @@ public enum SyncMessage: Codable, Sendable, Equatable {
     /// Header of a file; the next frame carries its bytes.
     case wallpaperData(WallpaperMeta)
     case roamingHandoff(RoamingObject)
+    /// "I cannot take this one" (screen full, roaming just switched off): the sender puts it back on its own screen.
+    /// Computers on 1.6.0 and older do not know this message and drop it.
+    case roamingReturn(RoamingObject)
 
     public func encoded() throws -> Data { try JSONEncoder().encode(self) }
 

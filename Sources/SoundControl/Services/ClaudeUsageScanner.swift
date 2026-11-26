@@ -10,7 +10,6 @@ actor ClaudeUsageScanner {
     static let shared = ClaudeUsageScanner()
 
     private static let minimumLookback: TimeInterval = 12 * 3600
-    private static let usageMarker = Data(#""usage""#.utf8)
     private static let newline = UInt8(ascii: "\n")
     private static let chunkSize = 2 * 1024 * 1024
     /// After a read this big, the freed pages go back to the system instead of staying in the app's heap.
@@ -83,8 +82,7 @@ actor ClaudeUsageScanner {
     }
 
     private func collect(_ lines: Data, since cutoff: Date) {
-        for line in lines.split(separator: Self.newline) where line.range(of: Self.usageMarker) != nil {
-            guard let entry = ClaudeUsage.entry(fromLine: Data(line)), entry.date >= cutoff else { continue }
+        for entry in ClaudeUsage.entries(inLines: lines, since: cutoff) {
             entries[entry.id] = entry
         }
     }

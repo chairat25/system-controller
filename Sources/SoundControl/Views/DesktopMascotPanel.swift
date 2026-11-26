@@ -9,25 +9,34 @@ import SwiftUI
 @Observable
 final class DesktopMascotSprite {
     private(set) var drawing: MascotDrawing
+    private(set) var side: Double
+    private(set) var hue: Double
     @ObservationIgnored private(set) var sheet: MascotSpriteSheet?
     @ObservationIgnored private var mascot: Mascot
     @ObservationIgnored private let cat = MeawkiCatDriver()
 
-    init(mascot: Mascot, pose: MascotPose) {
+    /// A mascot with no colour of its own (the panda) is tinted instead of hue-shifted, which would do nothing.
+    var isMonochrome: Bool { mascot == .panda }
+
+    init(mascot: Mascot, pose: MascotPose, size: Double, hue: Double) {
         self.mascot = mascot
+        side = size
+        self.hue = hue
         let sheet = MascotSpriteSheet.shared(for: mascot)
         self.sheet = sheet
         drawing = .make(mascot: mascot, sheet: sheet, cat: cat, pose: pose, face: .calm, target: nil,
-                        size: Double(MascotStroll.size))
+                        size: size)
     }
 
-    func update(mascot: Mascot, pose: MascotPose, face: MascotFace, target: MascotPoint?) {
+    func update(mascot: Mascot, pose: MascotPose, face: MascotFace, target: MascotPoint?, size: Double, hue: Double) {
+        if size != side { side = size }
+        if hue != self.hue { self.hue = hue }
         if mascot != self.mascot {
             self.mascot = mascot
             sheet = MascotSpriteSheet.shared(for: mascot)
         }
         let next = MascotDrawing.make(mascot: mascot, sheet: sheet, cat: cat, pose: pose, face: face, target: target,
-                                      size: Double(MascotStroll.size))
+                                      size: size)
         if next != drawing { drawing = next }
     }
 }
@@ -38,7 +47,25 @@ private struct DesktopMascotArt: View {
 
     var body: some View {
         MascotFigure(drawing: sprite.drawing, sheet: sprite.sheet)
-            .frame(width: MascotStroll.size, height: MascotStroll.size)
+            .modifier(MascotRecolour(hue: sprite.hue, isMonochrome: sprite.isMonochrome))
+            .frame(width: sprite.side, height: sprite.side)
+    }
+}
+
+/// The owner's colour for their mascot: the animal's colours turned around the colour wheel, or, for a black and
+/// white animal, a tint over its white.
+private struct MascotRecolour: ViewModifier {
+    let hue: Double
+    let isMonochrome: Bool
+
+    func body(content: Content) -> some View {
+        if hue == 0 {
+            content
+        } else if isMonochrome {
+            content.colorMultiply(Color(hue: hue / 360, saturation: 0.45, brightness: 1))
+        } else {
+            content.hueRotation(.degrees(hue))
+        }
     }
 }
 
@@ -53,8 +80,7 @@ final class DesktopMascotPanel: NSPanel {
     var onClick: (NSPoint) -> Void = { _ in }
 
     @MainActor
-    init(sprite: DesktopMascotSprite) {
-        let side = MascotStroll.size
+    init(sprite: DesktopMascotSprite, side: CGFloat) {
         super.init(contentRect: NSRect(x: 0, y: 0, width: side, height: side),
                    styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
         isOpaque = false

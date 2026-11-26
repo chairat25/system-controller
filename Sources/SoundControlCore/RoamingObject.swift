@@ -31,9 +31,14 @@ public struct RoamingObject: Codable, Sendable, Equatable, Identifiable {
     public let look: Mascot?
     /// Set when it was thrown off the edge, so it keeps flying on the next screen.
     public let flight: RoamingFlight?
+    /// Its home's colour shift in degrees, so it keeps its colour away from home. Nil from 1.6.0 and older.
+    public let hue: Double?
+    /// Its home's size choice, so it keeps its size away from home. Nil from 1.6.0 and older.
+    public let scale: Double?
 
     public init(id: String, kind: RoamingKind, yFraction: Double, direction: RoamingDirection, state: RoamingState,
-                home: String? = nil, look: Mascot? = nil, flight: RoamingFlight? = nil) {
+                home: String? = nil, look: Mascot? = nil, flight: RoamingFlight? = nil,
+                hue: Double? = nil, scale: Double? = nil) {
         self.id = id
         self.kind = kind
         self.yFraction = yFraction.isFinite ? min(max(yFraction, 0), 1) : 1
@@ -42,23 +47,47 @@ public struct RoamingObject: Codable, Sendable, Equatable, Identifiable {
         self.home = home
         self.look = look == Mascot.none ? nil : look
         self.flight = flight
+        let style = MascotStyle(scale: scale ?? 1, count: 1, hue: hue ?? 0)
+        self.hue = hue.map { _ in style.hue }
+        self.scale = scale.map { _ in style.scale }
     }
 
+    /// `look` is what 1.6.0 and older read, so it only ever names an animal they know; `species` is the exact one.
     private enum CodingKeys: String, CodingKey {
-        case id, kind, yFraction, direction, state, home, look, flight
+        case id, kind, yFraction, direction, state, home, look, species, flight, hue, scale
     }
 
-    /// A look this Mac does not know (a newer animal) arrives as no look, instead of dropping the whole object.
+    /// A look this computer does not know (a newer animal) falls back to the legacy look, then to no look,
+    /// instead of dropping the whole object.
     public init(from decoder: any Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
+        let species = (try? container.decodeIfPresent(String.self, forKey: .species)).flatMap { $0 }
+        let legacyLook = (try? container.decodeIfPresent(Mascot.self, forKey: .look)) ?? nil
         self.init(id: try container.decode(String.self, forKey: .id),
                   kind: try container.decode(RoamingKind.self, forKey: .kind),
                   yFraction: try container.decode(Double.self, forKey: .yFraction),
                   direction: try container.decode(RoamingDirection.self, forKey: .direction),
                   state: try container.decode(RoamingState.self, forKey: .state),
                   home: try container.decodeIfPresent(String.self, forKey: .home),
-                  look: (try? container.decodeIfPresent(Mascot.self, forKey: .look)) ?? nil,
-                  flight: try container.decodeIfPresent(RoamingFlight.self, forKey: .flight))
+                  look: species.flatMap(Mascot.init(rawValue:)) ?? legacyLook,
+                  flight: try container.decodeIfPresent(RoamingFlight.self, forKey: .flight),
+                  hue: (try? container.decodeIfPresent(Double.self, forKey: .hue)) ?? nil,
+                  scale: (try? container.decodeIfPresent(Double.self, forKey: .scale)) ?? nil)
+    }
+
+    public func encode(to encoder: any Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(id, forKey: .id)
+        try container.encode(kind, forKey: .kind)
+        try container.encode(yFraction, forKey: .yFraction)
+        try container.encode(direction, forKey: .direction)
+        try container.encode(state, forKey: .state)
+        try container.encodeIfPresent(home, forKey: .home)
+        try container.encodeIfPresent(look?.legacy, forKey: .look)
+        try container.encodeIfPresent(look?.rawValue, forKey: .species)
+        try container.encodeIfPresent(flight, forKey: .flight)
+        try container.encodeIfPresent(hue, forKey: .hue)
+        try container.encodeIfPresent(scale, forKey: .scale)
     }
 
     /// An object from the network is only taken when its id is a printable token.

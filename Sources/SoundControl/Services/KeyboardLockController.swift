@@ -17,6 +17,8 @@ final class KeyboardLockController {
     @ObservationIgnored private var expiry: DispatchWorkItem?
     @ObservationIgnored private var isAuthenticating = false
     @ObservationIgnored var onUnlock: (@MainActor () -> Void)?
+    /// Called once the overlay covers every screen.
+    @ObservationIgnored var onLock: (@MainActor () -> Void)?
 
     var isLocked: Bool { lock != nil }
 
@@ -61,6 +63,7 @@ final class KeyboardLockController {
         overlay = KeyboardLockOverlay(lock: next, link: link, sessions: sessions, onUnlock: { [weak self] in self?.unlockKeyboard() },
                                       onPasswordPrompt: { [weak self] in Task { await self?.unlockWithPassword() } })
         if next.expires { scheduleExpiry() }
+        onLock?()
     }
 
     /// Keys pass through only while the system password prompt needs them. Touch ID runs inline and needs none.

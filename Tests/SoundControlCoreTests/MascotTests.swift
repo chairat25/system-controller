@@ -97,9 +97,9 @@ struct MascotRouteTests {
 
 @Suite("Mascot choice")
 struct MascotChoiceTests {
-    @Test("seven animals, a cat by default, and None turns it off")
+    @Test("eight animals, a cat by default, and None turns it off")
     func choices() {
-        #expect(Mascot.animals.count == 7)
+        #expect(Mascot.animals.count == 8)
         #expect(!Mascot.animals.contains(.none))
         #expect(ScreenSaverSettings.default.mascot == .cat)
         #expect(ScreenSaverSettings.default.withMascot(.none).mascot == .none)
@@ -186,5 +186,28 @@ struct MascotLitTests {
         #expect(decoded.isMascotBright && decoded.mascotLevel == 0.3)
         let old = try JSONDecoder().decode(ScreenSaverSettings.self, from: Data(#"{"isClockBright":true}"#.utf8))
         #expect(!old.isMascotBright && old.mascotLevel == 1)
+    }
+}
+
+@Suite("Throw frame rate")
+struct ThrowFrameRateTests {
+    @Test("matches the display by default and never runs faster than it")
+    func intervals() {
+        #expect(ThrowFrameRate.default == .display)
+        #expect(ThrowFrameRate.display.interval(displayFPS: 120) == 1.0 / 120)
+        #expect(ThrowFrameRate.display.interval(displayFPS: 0) == 1.0 / 60)
+        #expect(ThrowFrameRate.fps120.interval(displayFPS: 60) == 1.0 / 60)
+        #expect(ThrowFrameRate.fps30.interval(displayFPS: 120) == 1.0 / 30)
+    }
+
+    @Test("round-trips in app settings, and old or broken files match the display")
+    func persists() throws {
+        let set = AppSettings.default.withThrowFrameRate(.fps60)
+        let decoded = try JSONDecoder().decode(AppSettings.self, from: JSONEncoder().encode(set))
+        #expect(decoded.throwFrameRate == .fps60)
+        let old = try JSONDecoder().decode(AppSettings.self, from: Data(#"{"autoUpdateEnabled":true}"#.utf8))
+        #expect(old.throwFrameRate == .display && old.autoUpdateEnabled)
+        let odd = try JSONDecoder().decode(AppSettings.self, from: Data(#"{"throwFrameRate":"fps999"}"#.utf8))
+        #expect(odd.throwFrameRate == .display)
     }
 }

@@ -55,6 +55,8 @@ public struct MeawkiCat: Sendable, Equatable {
         switch face {
         case .curious, .veryCurious: return .alert
         case .annoyed: return .arch
+        case .sleepy, .love: return .sit
+        case .happy: return .idle
         case .calm, .fleeing: break
         }
         switch pose.elapsed {

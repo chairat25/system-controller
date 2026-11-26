@@ -37,7 +37,7 @@ struct MascotSpriteTests {
     func sheetsAreComplete() throws {
         let total = MascotSpriteLayout.Clip.allCases.reduce(0) { $0 + $1.frameCount }
         #expect(total <= MascotSpriteLayout.columns * MascotSpriteLayout.rows)
-        for mascot in [Mascot.pig, .panda, .hippo] {
+        for mascot in [Mascot.pig, .panda, .hippo, .tabby] {
             let layout = try #require(MascotSpriteLayout.forMascot(mascot))
             #expect(layout.frames.count == total)
             #expect(layout.walkStride > 0 && layout.runStride > layout.walkStride)

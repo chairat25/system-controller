@@ -29,7 +29,11 @@ final class AppModel {
     /// Set when macOS refuses the screen saver shortcut, usually because another app already uses it.
     private(set) var shortcutProblem: String?
     /// Settings for the whole app, edited from the gear next to the tabs.
-    private(set) var appSettings = AppSettingsStore.load()
+    private(set) var appSettings: AppSettings = {
+        let settings = AppSettingsStore.load()
+        Localizer.shared.language = settings.language
+        return settings
+    }()
     /// Set when macOS refuses the popup shortcut.
     private(set) var popupShortcutProblem: String?
     /// The popup's open tab. The popup shortcut always opens on Control.
@@ -42,6 +46,8 @@ final class AppModel {
     let updater = AutoUpdater()
     /// Shares wallpapers and the roaming desktop mascot with paired Macs; idle until a sync toggle is on.
     let lanSync = LANSyncService()
+    /// The app's own CPU and memory use, and how hard it may work on this Mac right now.
+    let resources = ResourceMonitor()
 
     @ObservationIgnored private let store: ConfigStore
     @ObservationIgnored private let soundStore: UserSoundStore
@@ -84,14 +90,22 @@ final class AppModel {
         DispatchQueue.main.async { [weak self] in
             MainActor.assumeIsolated {
                 guard let self else { return }
+                MenuBarPopup.shared.install(model: self)
                 self.installTerminationSignal()
+                UISnapshot.installIfRequested { [weak self] command in self?.performSnapshotCommand(command) }
+                self.resources.onBudgetChange = { [weak self] budget in
+                    self?.sessions.setPollInterval(budget.sessionPollInterval)
+                }
+                self.resources.start(preference: { [weak self] in self?.appSettings.resourceSaving ?? .default })
                 self.installScreenSaverHotKey()
                 self.installPopupHotKey()
                 self.sessions.start(settings: { [weak self] in self?.limitGuardSettings ?? .default },
                                     idleSettings: { [weak self] in self?.idleCompact ?? .default },
                                     isLocked: { [weak self] in self?.keyboardLock.isLocked ?? false })
                 self.terminalPermissions.start(isLocked: { [weak self] in self?.keyboardLock.isLocked ?? false })
+                self.keyboardLock.onLock = { [weak self] in self?.screenSaverChanged(isOn: true) }
                 self.keyboardLock.onUnlock = { [weak self] in
+                    self?.screenSaverChanged(isOn: false)
                     self?.updater.notifyUnlocked()
                 }
                 self.updater.start(
@@ -103,7 +117,10 @@ final class AppModel {
                     screenSaverApplied: { [weak self] name in
                         self?.updateScreenSaver { $0.withCustomBackground(name: name) }
                     },
-                    mascot: { [weak self] in self?.screenSaver.activeMascot ?? .cat }
+                    mascot: { [weak self] in self?.screenSaver.activeMascot ?? .cat },
+                    throwFrameRate: { [weak self] in self?.appSettings.throwFrameRate ?? .default },
+                    mascotStyle: { [weak self] in self?.appSettings.mascotStyle ?? .default },
+                    budget: { [weak self] in self?.resources.budget ?? .full }
                 ))
                 if self.screenSaver.background == .desktopWallpaper {
                     ScreenSaverBackgroundStore.cacheDesktopWallpaper()
@@ -112,6 +129,7 @@ final class AppModel {
                 self.hub?.reconcile(enabled: self.config.enabledTriggers, isListening: self.config.isListening)
                 self.applyAudioReadiness()
                 self.warmSoundCache()
+                self.showMainWindowOnFirstLaunch()
             }
         }
 
@@ -487,14 +505,23 @@ final class AppModel {
         let next = transform(appSettings)
         guard next != appSettings else { return }
         let shortcutChanged = next.popupShortcut != appSettings.popupShortcut
+        let styleChanged = next.mascotStyle != appSettings.mascotStyle
+        let savingChanged = next.resourceSaving != appSettings.resourceSaving
         appSettings = next
+        Localizer.shared.language = next.language
         if shortcutChanged { registerPopupShortcut() }
+        if styleChanged { lanSync.mascotStyleChanged() }
+        if savingChanged { resources.preferenceChanged() }
         do {
             try AppSettingsStore.save(next)
         } catch {
             logger.error("Saving app settings failed: \(error.localizedDescription, privacy: .public)")
             alertMessage = "Could not save the settings: \(error.localizedDescription)"
         }
+    }
+
+    func setLanguage(_ language: AppLanguage) {
+        updateAppSettings { $0.withLanguage(language) }
     }
 
     func setAutoUpdate(_ enabled: Bool) {
@@ -524,9 +551,21 @@ final class AppModel {
         guard !keyboardLock.isLocked else { return }
         menuTab = .control
         isShowingAppSettings = false
-        if !MenuBarPopup.toggle() {
+        if !MenuBarPopup.shared.toggle() {
             logger.error("Could not find the menu-bar item to open the popup")
         }
+    }
+
+    private static let hasLaunchedKey = "hasLaunchedBefore"
+
+    func showMainWindow() { MainWindowController.shared.show(model: self) }
+
+    /// The window opens by itself only on the very first launch; afterwards the app lives in the menu bar.
+    private func showMainWindowOnFirstLaunch() {
+        let defaults = UserDefaults.standard
+        guard !defaults.bool(forKey: Self.hasLaunchedKey) else { return }
+        defaults.set(true, forKey: Self.hasLaunchedKey)
+        showMainWindow()
     }
 
     /// Starts the owner-lock screen saver. It reads and changes the settings live, so its drawers can adjust them.
@@ -568,6 +607,67 @@ final class AppModel {
             }
         } catch {
             alertMessage = error.localizedDescription
+        }
+    }
+
+    /// While the screen saver or the cleaning lock covers every screen, nothing behind it can be seen: work that
+    /// only feeds the desktop stops until it closes.
+    private func screenSaverChanged(isOn: Bool) {
+        lanSync.setDesktopPaused(isOn)
+    }
+
+    @ObservationIgnored private var screenSaverPreview: KeyboardLockOverlay?
+
+    /// Shows the screen saver without locking the keyboard and closes it by itself, so a script can measure it.
+    private func previewScreenSaver(seconds: TimeInterval) {
+        guard screenSaverPreview == nil, !keyboardLock.isLocked else { return }
+        let link = ScreenSaverLink(read: { [weak self] in self?.screenSaver ?? .default },
+                                   update: { [weak self] transform in self?.updateScreenSaver(transform) })
+        let close: @MainActor () -> Void = { [weak self] in
+            guard let self, let preview = screenSaverPreview else { return }
+            preview.close()
+            screenSaverPreview = nil
+            screenSaverChanged(isOn: false)
+            DispatchQueue.main.async { malloc_zone_pressure_relief(nil, 0) }
+        }
+        screenSaverPreview = KeyboardLockOverlay(lock: KeyboardLock(lockedAt: Date(), unlock: .ownerAuthentication),
+                                                 link: link, sessions: sessions, onUnlock: close,
+                                                 onPasswordPrompt: close)
+        screenSaverChanged(isOn: true)
+        DispatchQueue.main.asyncAfter(deadline: .now() + seconds) { close() }
+    }
+
+    /// Page changes a layout-check script asks for through `UISnapshot`.
+    private func performSnapshotCommand(_ command: String) {
+        switch command {
+        case "popup": UISnapshot.showPopupCopy(MenuBarView().environment(self))
+        case "settings": isShowingAppSettings.toggle()
+        case "pair-open": lanSync.pairing.openWindow()
+        case "pair-confirm": lanSync.pairing.confirm()
+        case "roaming-on": lanSync.update { $0.withMascotRoaming(true) }
+        case "roaming-off": lanSync.update { $0.withMascotRoaming(false) }
+        case "export-sprites":
+            let folder = URL(fileURLWithPath: ProcessInfo.processInfo.environment["SC_UI_SNAPSHOT"] ?? NSTemporaryDirectory())
+                .appendingPathComponent("sprites", isDirectory: true)
+            UISnapshot.write(MascotSpriteExport.export(to: folder).joined(separator: "\n"), named: "sprites.txt")
+        case let push where push.hasPrefix("push:"):
+            lanSync.debugPushMascot(to: PeerSide(rawValue: String(push.dropFirst(5))) ?? .right)
+        case let unpair where unpair.hasPrefix("unpair:"):
+            lanSync.unpair(String(unpair.dropFirst(7)))
+        case let side where side.hasPrefix("side:"):
+            // side:<peer id>:<left|right|none>
+            let parts = side.split(separator: ":").map(String.init)
+            if parts.count == 3 { lanSync.update { $0.withSide(PeerSide(rawValue: parts[2]), for: parts[1]) } }
+        case "relief": malloc_zone_pressure_relief(nil, 0)
+        case "main": showMainWindow()
+        case "main-close": MainWindowController.shared.close()
+        case "dump": UISnapshot.write(lanSync.debugSummary.joined(separator: "\n"), named: "state.txt")
+        case let preview where preview.hasPrefix("screensaver:"):
+            previewScreenSaver(seconds: TimeInterval(preview.dropFirst(12)) ?? 20)
+        default:
+            guard command.hasPrefix("tab:"), let tab = ModuleTab(rawValue: String(command.dropFirst(4))) else { return }
+            isShowingAppSettings = false
+            menuTab = tab
         }
     }
 }

@@ -1,4 +1,5 @@
 import SwiftUI
+import SoundControlCore
 
 /// Building blocks shared by every page of the menu-bar popover, so the three tabs read the same way.
 enum Spacing {
@@ -32,8 +33,7 @@ struct PopoverSection<Content: View, Accessory: View>: View {
             VStack(alignment: .leading, spacing: Spacing.control) { content }
                 .padding(Spacing.control)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .background(Theme.groupFill, in: RoundedRectangle(cornerRadius: Theme.groupRadius, style: .continuous))
-                .overlay(RoundedRectangle(cornerRadius: Theme.groupRadius, style: .continuous).strokeBorder(Theme.hairline))
+                .glassSurface()
         }
     }
 }
@@ -45,7 +45,7 @@ struct SectionHeader: View {
     init(_ title: String) { self.title = title }
 
     var body: some View {
-        Text(title)
+        Text(L(title))
             .font(.caption.weight(.semibold))
             .foregroundStyle(.secondary)
             .padding(.leading, Spacing.micro)
@@ -76,9 +76,9 @@ struct SettingRow<Trailing: View>: View {
                     .frame(width: Theme.rowIconWidth)
             }
             VStack(alignment: .leading, spacing: 1) {
-                Text(title).font(.callout)
+                Text(L(title)).font(.callout)
                 if let detail {
-                    Text(detail).font(.caption).foregroundStyle(.secondary)
+                    Text(L(detail)).font(.caption).foregroundStyle(.secondary)
                 }
             }
             Spacer(minLength: Spacing.related)
@@ -97,7 +97,7 @@ struct SettingToggle: View {
 
     var body: some View {
         SettingRow(title, detail: detail, systemImage: systemImage) {
-            Toggle(title, isOn: Binding(get: { isOn }, set: onChange))
+            Toggle(L(title), isOn: Binding(get: { isOn }, set: onChange))
                 .toggleStyle(.switch)
                 .controlSize(.small)
                 .labelsHidden()
@@ -117,7 +117,7 @@ struct Footnote: View {
     }
 
     var body: some View {
-        Text(text)
+        Text(L(text))
             .font(.caption)
             .foregroundStyle(tone)
             .fixedSize(horizontal: false, vertical: true)
@@ -146,7 +146,7 @@ struct StatusIndicator: View {
     var body: some View {
         HStack(spacing: 5) {
             Circle().fill(level.color).frame(width: 7, height: 7)
-            Text(text).font(.caption).foregroundStyle(level == .off ? .secondary : .primary)
+            Text(L(text)).font(.caption).foregroundStyle(level == .off ? .secondary : .primary)
         }
         .accessibilityElement(children: .combine)
     }
@@ -161,7 +161,7 @@ struct PrimaryActionButton: View {
 
     var body: some View {
         Button(action: action) {
-            Label(title, systemImage: systemImage).frame(maxWidth: .infinity)
+            Label(L(title), systemImage: systemImage).frame(maxWidth: .infinity)
         }
         .buttonStyle(.borderedProminent)
         .tint(Theme.accent)
@@ -179,7 +179,7 @@ struct SecondaryActionButton: View {
 
     var body: some View {
         Button(action: action) {
-            Label(title, systemImage: systemImage).frame(maxWidth: .infinity, alignment: .leading)
+            Label(L(title), systemImage: systemImage).frame(maxWidth: .infinity, alignment: .leading)
         }
         .buttonStyle(.bordered)
         .controlSize(.large)
@@ -202,5 +202,59 @@ struct DisclosureRow: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+    }
+}
+
+/// A whole-card link to a deeper page: a symbol tile, the title and a short detail, a chevron at the end.
+/// The card dims while pressed, so a click always answers.
+struct DisclosureCard: View {
+    let title: String
+    let detail: String
+    let systemImage: String
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: Spacing.control) {
+                SymbolTile(symbol: systemImage, size: 30)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(L(title)).font(.callout.weight(.medium))
+                    Text(L(detail)).font(.caption).foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer(minLength: Spacing.related)
+                Image(systemName: "chevron.right").font(.caption.weight(.semibold)).foregroundStyle(.tertiary)
+            }
+            .padding(Spacing.control)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .glassSurface()
+            .contentShape(RoundedRectangle(cornerRadius: Theme.groupRadius, style: .continuous))
+        }
+        .buttonStyle(PressDimStyle())
+    }
+}
+
+/// Dims its label a little while pressed, without moving anything.
+struct PressDimStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .opacity(configuration.isPressed ? 0.6 : 1)
+            .animation(.easeOut(duration: 0.12), value: configuration.isPressed)
+    }
+}
+
+/// English | ไทย. Each language is named in itself; the choice is kept on this Mac only.
+struct LanguagePicker: View {
+    let selection: AppLanguage
+    let onSelect: (AppLanguage) -> Void
+
+    var body: some View {
+        Picker(L("Language"), selection: Binding(get: { selection }, set: onSelect)) {
+            ForEach(AppLanguage.allCases) { language in
+                Text(language.title).tag(language)
+            }
+        }
+        .pickerStyle(.segmented)
+        .fixedSize()
     }
 }

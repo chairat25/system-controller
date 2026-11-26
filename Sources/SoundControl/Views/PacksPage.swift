@@ -15,13 +15,13 @@ struct PacksPage: View {
             PageHeader(title: "Sound Packs",
                        subtitle: "A pack voices every trigger that follows it. Triggers set to their own sounds keep them.") {
                 HStack {
-                    Button { importPack() } label: { Label("Import…", systemImage: "square.and.arrow.down") }
+                    Button { importPack() } label: { Label(L("Import…"), systemImage: "square.and.arrow.down") }
                     Menu {
                         ForEach(BuiltInPack.allCases, id: \.self) { base in
-                            Button("Start from \(base.title)") { editingPack = model.createPack(from: base).id }
+                            Button(L("Start from %@", L(base.title))) { editingPack = model.createPack(from: base).id }
                         }
                     } label: {
-                        Label("New pack", systemImage: "plus")
+                        Label(L("New pack"), systemImage: "plus")
                     }
                     .fixedSize()
                 }
@@ -42,9 +42,9 @@ struct PacksPage: View {
                     EmptyState("No custom packs yet",
                                message: "Start from any built-in pack, then swap in your own sounds trigger by trigger.",
                                systemImage: "theatermasks.fill") {
-                        Menu("New pack") {
+                        Menu(L("New pack")) {
                             ForEach(BuiltInPack.allCases, id: \.self) { base in
-                                Button("Start from \(base.title)") { editingPack = model.createPack(from: base).id }
+                                Button(L("Start from %@", L(base.title))) { editingPack = model.createPack(from: base).id }
                             }
                         }
                         .fixedSize()
@@ -60,12 +60,12 @@ struct PacksPage: View {
         .confirmationDialog("Delete “\(pendingDelete?.name ?? "")”?", isPresented: Binding(
             get: { pendingDelete != nil }, set: { if !$0 { pendingDelete = nil } }
         )) {
-            Button("Delete pack", role: .destructive) {
+            Button(L("Delete pack"), role: .destructive) {
                 if let pack = pendingDelete { model.deletePack(pack.id) }
                 pendingDelete = nil
             }
         } message: {
-            Text("Your imported sounds stay in My Sounds.")
+            Text(L("Your imported sounds stay in My Sounds."))
         }
     }
 
@@ -78,24 +78,24 @@ struct PacksPage: View {
                     Text(pack.name).font(.body.weight(.medium))
                     if isActive { Badge(text: "Active", color: Theme.accent, symbol: "checkmark") }
                 }
-                Text("Based on \(pack.base.title) · \(pack.overrides.count) custom trigger\(pack.overrides.count == 1 ? "" : "s")")
+                Text(L(pack.overrides.count == 1 ? "Based on %@ · %@ custom trigger" : "Based on %@ · %@ custom triggers", L(pack.base.title), pack.overrides.count))
                     .font(.caption).foregroundStyle(.secondary)
             }
             Spacer()
             if !isActive {
-                Button("Use pack") { withAnimation(.easeOut(duration: 0.15)) { model.update { $0.selectingPack(.custom(pack.id)) } } }
+                Button(L("Use pack")) { withAnimation(.easeOut(duration: 0.15)) { model.update { $0.selectingPack(.custom(pack.id)) } } }
             }
-            Button("Edit") { editingPack = pack.id }
+            Button(L("Edit")) { editingPack = pack.id }
             Menu {
-                Button("Export…") { export(pack) }
+                Button(L("Export…")) { export(pack) }
                 Divider()
-                Button("Delete…", role: .destructive) { pendingDelete = pack }
+                Button(L("Delete…"), role: .destructive) { pendingDelete = pack }
             } label: {
                 Image(systemName: "ellipsis.circle")
             }
             .menuIndicator(.hidden)
             .fixedSize()
-            .help("More actions")
+            .help(L("More actions"))
             .accessibilityLabel("More actions for \(pack.name)")
         }
         .rowPadding()
@@ -139,7 +139,7 @@ private struct BuiltInPackCard: View {
                 Spacer()
                 if isActive { Badge(text: "Active", color: Theme.accent, symbol: "checkmark") }
             }
-            Text(pack.title).font(.headline)
+            Text(L(pack.title)).font(.headline)
             Text(pack.tagline).font(.caption).foregroundStyle(.secondary).lineLimit(2, reservesSpace: true)
             HStack {
                 Button {
@@ -148,10 +148,10 @@ private struct BuiltInPackCard: View {
                     previewStep += 1
                     if let ref = pack.sounds(for: motif).first { model.preview(ref) }
                 } label: {
-                    Label("Listen", systemImage: "play.fill")
+                    Label(L("Listen"), systemImage: "play.fill")
                 }
                 Spacer()
-                Button(isActive ? "In use" : "Use pack") {
+                Button(L(isActive ? "In use" : "Use pack")) {
                     withAnimation(.easeOut(duration: 0.15)) { model.update { $0.selectingPack(.builtIn(pack)) } }
                 }
                 .disabled(isActive)
@@ -160,9 +160,8 @@ private struct BuiltInPackCard: View {
             }
         }
         .padding(14)
-        .background(.background.secondary, in: RoundedRectangle(cornerRadius: Theme.cardRadius, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: Theme.cardRadius, style: .continuous)
-            .strokeBorder(isActive ? Theme.accent.opacity(0.55) : Theme.hairline, lineWidth: isActive ? 1.5 : 1))
+        .glassSurface(radius: Theme.cardRadius, rim: isActive ? Theme.accent.opacity(0.7) : nil,
+                      rimWidth: isActive ? 1.5 : 1)
         .accessibilityElement(children: .contain)
         .accessibilityLabel("\(pack.title)\(isActive ? ", active" : "")")
     }

@@ -10,15 +10,15 @@ struct LANSyncSection: View {
 
     var body: some View {
         Section {
-            Toggle("Sync wallpaper", isOn: Binding(
+            Toggle(L("Sync wallpaper"), isOn: Binding(
                 get: { sync.settings.isWallpaperSyncOn },
                 set: { value in sync.update { $0.withWallpaperSync(value) } }))
-            Toggle("Mascot roams between Macs", isOn: Binding(
+            Toggle(L("Mascot roams between Macs"), isOn: Binding(
                 get: { sync.settings.isMascotRoamingOn },
                 set: { value in sync.update { $0.withMascotRoaming(value) } }))
             if sync.settings.isMascotRoamingOn {
-                LabeledContent("This Mac's animal") {
-                    Text(model.screenSaver.activeMascot.title).foregroundStyle(.secondary)
+                LabeledContent(L("This Mac's animal")) {
+                    Text(L(model.screenSaver.activeMascot.title)).foregroundStyle(.secondary)
                 }
                 MascotGrid(selection: model.screenSaver.activeMascot) { mascot in
                     model.updateScreenSaver { $0.withMascot(mascot) }
@@ -26,6 +26,7 @@ struct LANSyncSection: View {
             }
             ForEach(sync.settings.pairedPeers) { peer in
                 PairedMacRow(peer: peer, isConnected: sync.connectedPeerIDs.contains(peer.id),
+                             version: sync.peerVersions[peer.id],
                              setSide: { side in sync.update { $0.withSide(side, for: peer.id) } },
                              unpair: { sync.unpair(peer.id) })
             }
@@ -34,9 +35,9 @@ struct LANSyncSection: View {
                 Text(problem).font(.caption).foregroundStyle(Theme.warning)
             }
         } header: {
-            Text("Sync")
+            Text(L("Sync"))
         } footer: {
-            Text("Wallpaper sync keeps the screen saver photo and the desktop wallpaper the same on every paired Mac; the newest choice wins. The mascot can walk off one screen edge and appear on the Mac you set for that side. Only Macs you pair, by comparing a code on both screens, can connect. Nothing runs on the network while both switches are off.")
+            Text(L("Wallpaper sync keeps the screen saver photo and the desktop wallpaper the same on every paired Mac; the newest choice wins. The mascot can walk off one screen edge and appear on the Mac you set for that side. Only Macs you pair, by comparing a code on both screens, can connect. Nothing runs on the network while both switches are off."))
         }
     }
 }
@@ -44,42 +45,60 @@ struct LANSyncSection: View {
 struct PairedMacRow: View {
     let peer: PairedPeer
     let isConnected: Bool
+    /// What it said in its hello; nil while it is not connected.
+    var version: LANSyncService.PeerVersion?
     let setSide: (PeerSide?) -> Void
     let unpair: () -> Void
 
     var body: some View {
-        LabeledContent {
-            HStack(spacing: 6) {
-                Picker("Side", selection: Binding(get: { peer.side }, set: setSide)) {
-                    Text("Left").tag(PeerSide?.some(.left))
-                    Text("Not beside").tag(PeerSide?.none)
-                    Text("Right").tag(PeerSide?.some(.right))
+        HStack(spacing: Spacing.related) {
+            Circle().fill(isConnected ? Theme.success : Color.secondary.opacity(0.6))
+                .frame(width: 7, height: 7)
+                .frame(width: Theme.rowIconWidth)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(peer.name).font(.callout).lineLimit(1).truncationMode(.middle)
+                Text(placement).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                if let mismatch {
+                    Text(mismatch).font(.caption).foregroundStyle(Theme.warning)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
-                .labelsHidden()
-                .fixedSize()
-                Menu {
-                    Button("Unpair", role: .destructive, action: unpair)
-                } label: {
-                    Image(systemName: "ellipsis")
-                }
-                .menuIndicator(.hidden)
-                .fixedSize()
             }
-        } label: {
-            VStack(alignment: .leading, spacing: 2) {
-                HStack(spacing: 6) {
-                    Circle().fill(isConnected ? Color.green : Color.secondary).frame(width: 7, height: 7)
-                    Text(peer.name).lineLimit(1)
-                }
-                Text(placement).font(.caption).foregroundStyle(.secondary)
+            .layoutPriority(1)
+            Spacer(minLength: Spacing.micro)
+            Picker(L("Side"), selection: Binding(get: { peer.side }, set: setSide)) {
+                Text(L("Left")).tag(PeerSide?.some(.left))
+                Text(L("Not beside")).tag(PeerSide?.none)
+                Text(L("Right")).tag(PeerSide?.some(.right))
             }
+            .labelsHidden()
+            .controlSize(.small)
+            .fixedSize()
+            Menu {
+                Button(L("Unpair"), role: .destructive, action: unpair)
+            } label: {
+                Image(systemName: "ellipsis")
+            }
+            .menuStyle(.borderlessButton)
+            .menuIndicator(.hidden)
+            .fixedSize()
+            .help(L("More"))
         }
     }
 
+    /// Both sides need the same version for a visitor to keep its look; say so instead of looking broken.
+    private var mismatch: String? {
+        guard isConnected, let version else { return nil }
+        guard let theirs = version.appVersion else { return L("Runs an older version. Update it to 1.7 or later.") }
+        // The Windows companion has its own version numbers; it speaks the same protocol.
+        guard version.platform == "macos", theirs != LANSyncService.appVersion else { return nil }
+        return L("Runs %@, this Mac %@. Update both to the same version.", theirs, LANSyncService.appVersion)
+    }
+
     private var placement: String {
-        let status = isConnected ? "Connected" : "Not nearby"
-        guard let side = peer.side else { return "\(status) · wallpaper only" }
-        return "\(status) · to the \(side.title.lowercased())"
+        let device = version?.platform == "windows" ? "PC · " : ""
+        let status = device + (isConnected ? L("Connected") : L("Not nearby"))
+        guard let side = peer.side else { return "\(status) · \(L("wallpaper only"))" }
+        return "\(status) · \(L(side == .left ? "to the left" : "to the right"))"
     }
 }
 
@@ -91,18 +110,17 @@ struct PairingControls: View {
         case let .confirming(code, peerName):
             confirmation(code: code, peerName: peerName)
         case let .connecting(peerName):
-            LabeledContent("Pairing with \(peerName)") {
+            SettingRow(L("Pairing with %@", peerName), systemImage: "link") {
                 HStack {
                     ProgressView().controlSize(.small)
-                    Button("Cancel") { pairing.cancel() }
+                    Button(L("Cancel")) { pairing.cancel() }.controlSize(.small)
                 }
             }
         case let .failed(reason):
-            LabeledContent {
-                Button("Try Again") { pairing.cancel() }
-            } label: {
-                Text(reason).font(.caption).foregroundStyle(Theme.warning)
+            SettingRow(reason, systemImage: "exclamationmark.triangle") {
+                Button(L("Try Again")) { pairing.cancel() }.controlSize(.small)
             }
+            .foregroundStyle(Theme.warning)
         case .idle:
             idle
         }
@@ -111,39 +129,35 @@ struct PairingControls: View {
     @ViewBuilder
     private var idle: some View {
         if pairing.isWindowOpen {
-            LabeledContent {
-                Button("Stop") { pairing.closeWindow() }
-            } label: {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Looking for Macs…")
-                    Text("Open Settings on the other Mac and choose Pair a Mac there too. This stops after 2 minutes.")
-                        .font(.caption).foregroundStyle(.secondary)
-                }
+            SettingRow("Looking for Macs and PCs…",
+                       detail: "Open Settings on the other computer and choose Pair there too. This stops after 2 minutes.",
+                       systemImage: "dot.radiowaves.left.and.right") {
+                Button(L("Stop")) { pairing.closeWindow() }.controlSize(.small)
             }
             ForEach(pairing.nearby) { mac in
-                LabeledContent(mac.name) {
-                    Button("Pair") { pairing.pair(with: mac) }
+                SettingRow(mac.name, systemImage: "desktopcomputer") {
+                    Button(L("Pair")) { pairing.pair(with: mac) }.controlSize(.small)
                 }
             }
         } else {
-            LabeledContent("Add a Mac") {
-                Button("Pair a Mac…") { pairing.openWindow() }
+            SettingRow("Add a Mac or PC", systemImage: "plus.circle") {
+                Button(L("Pair…")) { pairing.openWindow() }.controlSize(.small)
             }
         }
     }
 
     private func confirmation(code: String, peerName: String) -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Does \(peerName) show the same code?").font(.callout)
+            Text(L("Does %@ show the same code?", peerName)).font(.callout)
             Text(Self.spaced(code))
                 .font(.system(size: 30, weight: .semibold, design: .monospaced))
                 .textSelection(.disabled)
             HStack {
-                Button("Confirm") { pairing.confirm() }
+                Button(L("Confirm")) { pairing.confirm() }
                     .buttonStyle(.borderedProminent)
-                Button("Cancel") { pairing.cancel() }
+                Button(L("Cancel")) { pairing.cancel() }
             }
-            Text("Tap Confirm on both Macs only if the codes match.").font(.caption).foregroundStyle(.secondary)
+            Text(L("Tap Confirm on both Macs only if the codes match.")).font(.caption).foregroundStyle(.secondary)
         }
     }
 

@@ -22,17 +22,17 @@ struct TitleControls: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Toggle("Show title", isOn: Binding(get: { settings.showsTitle },
+            Toggle(L("Show title"), isOn: Binding(get: { settings.showsTitle },
                                                set: { value in update { $0.withShowsTitle(value) } }))
             Group {
                 if allowsTyping {
-                    TextField("Title", text: $draft)
+                    TextField(L("Title"), text: $draft)
                         .textFieldStyle(.roundedBorder)
                         .focused($isEditing)
                         .onSubmit(commit)
                         .onChange(of: isEditing) { _, editing in if !editing { commit() } }
                 } else {
-                    Text(settings.title).font(.callout).lineLimit(1)
+                    Text(L(settings.title)).font(.callout).lineLimit(1)
                 }
                 if !suggestions.isEmpty {
                     FlowChips(items: suggestions) { choice in
@@ -70,7 +70,7 @@ private struct FlowChips: View {
             Button { onPick(item) } label: {
                 Text(item).font(.caption).lineLimit(1)
                     .padding(.horizontal, 8).padding(.vertical, 4)
-                    .background(Color.secondary.opacity(0.18), in: Capsule())
+                    .glassChip(isSelected: false, radius: 12)
             }
             .buttonStyle(.plain)
         }
@@ -104,7 +104,7 @@ struct WidgetSizeControls: View {
                            in: ScreenSaverSettings.scaleRange)
                 }
             }
-            Text("Pinch a widget or drag its corner on the screen saver to resize it.")
+            Text(L("Pinch a widget or drag its corner on the screen saver to resize it."))
                 .font(.caption).foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
         }

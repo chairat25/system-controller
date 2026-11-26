@@ -23,8 +23,8 @@ struct MySoundsPage: View {
                        subtitle: sounds.isEmpty ? "Your own clips, ready for any trigger."
                                                 : "\(sounds.count) sound\(sounds.count == 1 ? "" : "s") in your library.") {
                 HStack {
-                    Button { model.revealSoundsFolder() } label: { Label("Show in Finder", systemImage: "folder") }
-                    Button { chooseFiles() } label: { Label("Import…", systemImage: "plus") }
+                    Button { model.revealSoundsFolder() } label: { Label(L("Show in Finder"), systemImage: "folder") }
+                    Button { chooseFiles() } label: { Label(L("Import…"), systemImage: "plus") }
                         .buttonStyle(.borderedProminent)
                         .tint(Theme.accent)
                 }
@@ -37,18 +37,18 @@ struct MySoundsPage: View {
                 library(visibleSounds)
             }
         }
-        .alert("Rename sound", isPresented: Binding(get: { renaming != nil }, set: { if !$0 { renaming = nil } })) {
-            TextField("Name", text: $newName)
-            Button("Rename") {
+        .alert(L("Rename sound"), isPresented: Binding(get: { renaming != nil }, set: { if !$0 { renaming = nil } })) {
+            TextField(L("Name"), text: $newName)
+            Button(L("Rename")) {
                 if let sound = renaming { model.renameSound(sound.id, to: newName) }
                 renaming = nil
             }
-            Button("Cancel", role: .cancel) { renaming = nil }
+            Button(L("Cancel"), role: .cancel) { renaming = nil }
         }
         .confirmationDialog("Delete “\(pendingDelete?.name ?? "")”?", isPresented: Binding(
             get: { pendingDelete != nil }, set: { if !$0 { pendingDelete = nil } }
         )) {
-            Button("Delete sound", role: .destructive) {
+            Button(L("Delete sound"), role: .destructive) {
                 if let sound = pendingDelete { model.deleteSound(sound.id) }
                 pendingDelete = nil
             }
@@ -76,7 +76,7 @@ struct MySoundsPage: View {
         SearchField(prompt: "Search sounds", text: $search)
         FilterSegment(title: "Show", selection: $filter)
         Spacer(minLength: 0)
-        Picker("Sort by", selection: $sort) {
+        Picker(L("Sort by"), selection: $sort) {
             ForEach(UserSoundLibrary.Sort.allCases, id: \.self) { Text($0.rawValue).tag($0) }
         }
         .fixedSize()
@@ -87,7 +87,7 @@ struct MySoundsPage: View {
         if sounds.isEmpty {
             EmptyState("No matching sounds", message: "Try another word or switch the filter back to All.",
                        systemImage: "magnifyingglass") {
-                Button("Show all sounds") {
+                Button(L("Show all sounds")) {
                     search = ""
                     filter = .all
                 }
@@ -103,7 +103,7 @@ struct MySoundsPage: View {
             if isCompact && !isDropTargeted {
                 HStack(spacing: Spacing.related) {
                     Image(systemName: "waveform.badge.plus").foregroundStyle(Theme.accent)
-                    Text("Drop audio files here to add them").font(.callout)
+                    Text(L("Drop audio files here to add them")).font(.callout)
                     Text("· \(Self.formats)").font(.caption).foregroundStyle(.secondary).lineLimit(1)
                     Spacer(minLength: 0)
                 }
@@ -112,12 +112,12 @@ struct MySoundsPage: View {
             } else {
                 VStack(spacing: 6) {
                     Image(systemName: "waveform.badge.plus").font(.system(size: 30)).foregroundStyle(Theme.accent)
-                    Text(isDropTargeted ? "Release to import" : "Drop audio files here").font(.headline)
+                    Text(L(isDropTargeted ? "Release to import" : "Drop audio files here")).font(.headline)
                     Text(Self.formats).font(.caption).foregroundStyle(.secondary)
-                    Text("Sounds are copied into Sound Control, so moving the originals is fine.")
+                    Text(L("Sounds are copied into Sound Control, so moving the originals is fine."))
                         .font(.caption).foregroundStyle(.secondary)
                     if !isDropTargeted {
-                        Button("Choose files…") { chooseFiles() }.padding(.top, Spacing.micro)
+                        Button(L("Choose files…")) { chooseFiles() }.padding(.top, Spacing.micro)
                     }
                 }
                 .frame(maxWidth: .infinity)
@@ -145,10 +145,10 @@ struct MySoundsPage: View {
                     Text(sound.name).font(.body.weight(.medium))
                     HStack(spacing: 6) {
                         Text("\(sound.duration.formatted(.number.precision(.fractionLength(1)))) s")
-                        Text("·")
+                        Text(L("·"))
                         Text(UserSoundLibrary.format(of: sound))
-                        Text("·")
-                        Text(usage == 0 ? "Not used" : "Used by \(usage)")
+                        Text(L("·"))
+                        Text(L(usage == 0 ? "Not used" : "Used by %@", usage))
                             .foregroundStyle(usage == 0 ? Color.secondary : Theme.accent)
                     }
                     .font(.caption.monospacedDigit())
@@ -158,23 +158,23 @@ struct MySoundsPage: View {
                 PlayButton { model.preview(.user(id: sound.id)) }
                 if usage > 0 {
                     RowIconButton(systemImage: isExpanded ? "chevron.up" : "chevron.down",
-                                  help: isExpanded ? "Hide where it is used" : "Show where it is used") {
+                                  help: L(isExpanded ? "Hide where it is used" : "Show where it is used")) {
                         withAnimation(.easeInOut(duration: 0.15)) { selected = isExpanded ? nil : sound.id }
                     }
                 }
                 Menu {
-                    Button("Rename…") {
+                    Button(L("Rename…")) {
                         newName = sound.name
                         renaming = sound
                     }
                     Divider()
-                    Button("Delete…", role: .destructive) { pendingDelete = sound }
+                    Button(L("Delete…"), role: .destructive) { pendingDelete = sound }
                 } label: {
                     Image(systemName: "ellipsis.circle")
                 }
                 .menuIndicator(.hidden)
                 .fixedSize()
-                .help("More actions")
+                .help(L("More actions"))
                 .accessibilityLabel("More actions for \(sound.name)")
             }
             if isExpanded {

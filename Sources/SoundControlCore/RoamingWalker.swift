@@ -17,6 +17,8 @@ public struct RoamingWalker: Sendable, Equatable {
     static let runFactor: Double = 3.2
     /// How long one scare makes it run.
     static let fleeDuration: TimeInterval = 1.8
+    /// How long a held pose or a heading lasts without being asked for again.
+    static let holdTime: TimeInterval = 1
 
     public let id: String
     public let kind: RoamingKind
@@ -75,6 +77,23 @@ public struct RoamingWalker: Sendable, Equatable {
         let towardRight = pointX < x + size / 2
         return copy(facesRight: towardRight, isWalking: true, isRunning: true, elapsed: 0,
                     timeLeft: Self.fleeDuration)
+    }
+
+    /// Holds still where it is, turned this way (nil keeps the way it faces), while the owner of the walk keeps
+    /// asking for it each frame. Only on this screen; it strolls on again soon after the asking stops.
+    public func standing(facesRight: Bool?) -> Self {
+        guard phase == .inside else { return self }
+        return copy(facesRight: facesRight ?? self.facesRight, isWalking: false, isRunning: false,
+                    elapsed: isWalking ? 0 : elapsed, timeLeft: Self.holdTime)
+    }
+
+    /// Heads for a point (the middle of the object, like `x` plus half its size), walking or running, while the
+    /// owner keeps asking each frame. Only on this screen.
+    public func heading(towardX target: Double, size: Double, running: Bool) -> Self {
+        guard phase == .inside else { return self }
+        let faces = target >= x + size / 2
+        return copy(facesRight: faces, isWalking: true, isRunning: running, elapsed: isWalking ? elapsed : 0,
+                    timeLeft: Self.holdTime)
     }
 
     /// The walker `dt` seconds later, plus the object to hand over when it has walked fully off an edge

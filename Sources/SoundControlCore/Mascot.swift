@@ -2,7 +2,7 @@ import Foundation
 
 /// The little animal that wanders along the bottom of the screen saver, so a locked screen looks friendly.
 public enum Mascot: String, Codable, Sendable, CaseIterable, Identifiable {
-    case none, cat, pig, puppy, bunny, panda, penguin, hippo
+    case none, cat, pig, puppy, bunny, panda, penguin, hippo, tabby
 
     public static let animals: [Mascot] = allCases.filter { $0 != .none }
 
@@ -18,6 +18,16 @@ public enum Mascot: String, Codable, Sendable, CaseIterable, Identifiable {
         case .panda: "Panda"
         case .penguin: "Penguin"
         case .hippo: "Hippo"
+        case .tabby: "Ginger Cat"
+        }
+    }
+
+    /// The closest animal that version 1.6.0 can draw. A visitor is sent with this as its `look`, so an older
+    /// computer shows a cat for a ginger cat instead of failing to read it and drawing its own animal.
+    public var legacy: Mascot {
+        switch self {
+        case .tabby: .cat
+        case .none, .cat, .pig, .puppy, .bunny, .panda, .penguin, .hippo: self
         }
     }
 }

@@ -64,6 +64,34 @@ public enum ClaudeUsage {
         return TokenUsageEntry(id: id, date: date, tokens: tokens)
     }
 
+    private static let usageMarker = Array(#""usage""#.utf8)
+    private static let newline = Int32(UInt8(ascii: "\n"))
+
+    /// Every usage entry at or after `cutoff` in a run of transcript lines, in file order. Lines are found with
+    /// `memchr` and the marker with `memmem` on the raw bytes, and only lines that mention usage are parsed: on a
+    /// first read of several hundred MB this is many times faster than splitting `Data` line by line.
+    public static func entries(inLines lines: Data, since cutoff: Date) -> [TokenUsageEntry] {
+        lines.withUnsafeBytes { (raw: UnsafeRawBufferPointer) -> [TokenUsageEntry] in
+            guard let base = raw.baseAddress, !raw.isEmpty else { return [] }
+            return usageMarker.withUnsafeBytes { (marker: UnsafeRawBufferPointer) -> [TokenUsageEntry] in
+                var found: [TokenUsageEntry] = []
+                var start = 0
+                while start < raw.count {
+                    let line = base + start
+                    let rest = raw.count - start
+                    let length = memchr(line, newline, rest).map { UnsafeRawPointer($0) - line } ?? rest
+                    let mentionsUsage = length >= marker.count
+                        && memmem(line, length, marker.baseAddress, marker.count) != nil
+                    if mentionsUsage, let entry = entry(fromLine: Data(bytes: line, count: length)), entry.date >= cutoff {
+                        found.append(entry)
+                    }
+                    start += length + 1
+                }
+                return found
+            }
+        }
+    }
+
     public static func summary(of entries: [TokenUsageEntry], now: Date,
                                calendar: Calendar = .current) -> ClaudeUsageSummary {
         let sorted = entries.filter { $0.date <= now }.sorted { $0.date < $1.date }
